@@ -1,4 +1,17 @@
 -- 001_init_schema.sql
+-- Create auth schema for local development (Supabase has this built-in)
+CREATE SCHEMA IF NOT EXISTS auth;
+
+-- Create auth.users table for local development
+CREATE TABLE IF NOT EXISTS auth.users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT UNIQUE,
+  encrypted_password TEXT,
+  email_confirmed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
 CREATE SCHEMA IF NOT EXISTS campus_circle;
 
 CREATE TABLE IF NOT EXISTS campus_circle.parents (

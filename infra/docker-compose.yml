@@ -1,4 +1,6 @@
-version: '3.8'
+#version: '3.8'
+
+name: campus-circle
 
 services:
   nginx:
@@ -6,36 +8,48 @@ services:
     ports:
       - "80:80"
     volumes:
-      - ./infra/nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+      - ../frontend/build:/usr/share/nginx/html:ro
     depends_on:
-      - frontend
       - backend
+    profiles:
+      - nginx
 
   frontend:
     build:
-      context: .
-      dockerfile: infra/Dockerfile.frontend
+      context: ..
+      dockerfile: infra/Dockerfile.frontend.dev
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=development
+      - REACT_APP_API_URL=http://localhost:8000/api
+      - CHOKIDAR_USEPOLLING=true
     volumes:
-      - ./frontend:/app
+      - ../frontend:/app
+      - /app/node_modules
+    stdin_open: true
+    tty: true
+    profiles:
+      - dev
 
   backend:
     build:
-      context: .
+      context: ..
       dockerfile: infra/Dockerfile.backend
     ports:
       - "8000:8000"
     environment:
       - APP_ENV=development
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
     volumes:
-      - ./backend:/app
+      - ../backend:/app
 
   migrations:
     build:
-      context: .
+      context: ..
       dockerfile: infra/Dockerfile.migrations
     environment:
       - SUPABASE_DB_HOST=${SUPABASE_DB_HOST}
@@ -53,12 +67,15 @@ services:
         for f in /migrations/*.sql; do PGPASSWORD=$$SUPABASE_DB_PASSWORD psql -v ON_ERROR_STOP=1 --host $$SUPABASE_DB_HOST --port $$SUPABASE_DB_PORT --username $$SUPABASE_DB_USER --dbname $$SUPABASE_DB_NAME -f $$f; done
       "
     volumes:
-      - ./migrations:/migrations
+      - ../migrations:/migrations
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    profiles:
+      - migrations
 
   db:
-    image: supabase/postgres
+    image: postgres:15-alpine
     ports:
       - "5432:5432"
     environment:
@@ -67,6 +84,11 @@ services:
       - POSTGRES_DB=${SUPABASE_DB_NAME}
     volumes:
       - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${SUPABASE_DB_USER} -d ${SUPABASE_DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 volumes:
   db_data:

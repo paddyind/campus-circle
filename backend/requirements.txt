@@ -1,6 +1,6 @@
 fastapi
 uvicorn
-supabase-py
+supabase
 python-dotenv
 psycopg2-binary
 SQLAlchemy
@@ -8,3 +8,4 @@ asyncpg
 pydantic
 python-jose[cryptography]
 requests
+email-validator
