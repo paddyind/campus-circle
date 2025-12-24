@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+supabase-py
+python-dotenv
+psycopg2-binary
+SQLAlchemy
+asyncpg
+pydantic
+python-jose[cryptography]
+requests

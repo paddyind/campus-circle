@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:stable-alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./infra/nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - frontend
+      - backend
+
+  frontend:
+    build:
+      context: .
+      dockerfile: infra/Dockerfile.frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ./frontend:/app
+
+  backend:
+    build:
+      context: .
+      dockerfile: infra/Dockerfile.backend
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=development
+    volumes:
+      - ./backend:/app
+
+  migrations:
+    build:
+      context: .
+      dockerfile: infra/Dockerfile.migrations
+    environment:
+      - SUPABASE_DB_HOST=${SUPABASE_DB_HOST}
+      - SUPABASE_DB_PORT=${SUPABASE_DB_PORT}
+      - SUPABASE_DB_NAME=${SUPABASE_DB_NAME}
+      - SUPABASE_DB_USER=${SUPABASE_DB_USER}
+      - SUPABASE_DB_PASSWORD=${SUPABASE_DB_PASSWORD}
+    command: >
+      sh -c "
+        echo 'Waiting for database...' &&
+        while ! pg_isready -h $$SUPABASE_DB_HOST -p $$SUPABASE_DB_PORT -U $$SUPABASE_DB_USER; do
+          sleep 2;
+        done;
+        echo 'Database is ready!';
+        for f in /migrations/*.sql; do PGPASSWORD=$$SUPABASE_DB_PASSWORD psql -v ON_ERROR_STOP=1 --host $$SUPABASE_DB_HOST --port $$SUPABASE_DB_PORT --username $$SUPABASE_DB_USER --dbname $$SUPABASE_DB_NAME -f $$f; done
+      "
+    volumes:
+      - ./migrations:/migrations
+    depends_on:
+      - db
+
+  db:
+    image: supabase/postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_PASSWORD=${SUPABASE_DB_PASSWORD}
+      - POSTGRES_USER=${SUPABASE_DB_USER}
+      - POSTGRES_DB=${SUPABASE_DB_NAME}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+volumes:
+  db_data:
