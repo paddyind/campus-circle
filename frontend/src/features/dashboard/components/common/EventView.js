@@ -1,15 +1,17 @@
 import React from 'react';
 
-const EventView = () => {
-  // This component will display upcoming events.
-  // For now, it's a placeholder.
+const EventView = ({ events }) => {
+  if (!events || events.length === 0) {
+    return <p>No upcoming events.</p>;
+  }
+
   return (
     <div>
       <h2>Upcoming Events</h2>
       <ul>
-        <li>Event 1</li>
-        <li>Event 2</li>
-        <li>Event 3</li>
+        {events.map((event) => (
+          <li key={event.id}>{event.name}</li>
+        ))}
       </ul>
     </div>
   );

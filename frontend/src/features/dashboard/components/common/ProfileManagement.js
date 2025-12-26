@@ -1,12 +1,15 @@
 import React from 'react';
 
-const ProfileManagement = () => {
-  // This component will allow users to manage their profile.
-  // For now, it's a placeholder.
+const ProfileManagement = ({ profile }) => {
+  if (!profile) {
+    return <p>Loading profile...</p>;
+  }
+
   return (
     <div>
       <h2>Profile Management</h2>
-      <p>Profile editing form will go here.</p>
+      <p>Name: {profile.name}</p>
+      <p>Email: {profile.email}</p>
     </div>
   );
 };

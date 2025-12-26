@@ -1,13 +1,24 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 const SessionNotifier = () => {
-  // This component will be responsible for displaying in-app notifications
-  // for events like login from a new device, or when a session is about to expire.
-  // For now, it's a placeholder.
+  const [notification, setNotification] = useState(null);
+
+  useEffect(() => {
+    // Simulate a session alert after 5 seconds
+    const timer = setTimeout(() => {
+      setNotification('Your session is about to expire.');
+    }, 5000);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!notification) {
+    return null;
+  }
 
   return (
-    <div className="session-notifier">
-      {/* Notifications will be rendered here */}
+    <div className="session-notifier" style={{ color: 'orange', padding: '1em', border: '1px solid orange' }}>
+      {notification}
     </div>
   );
 };

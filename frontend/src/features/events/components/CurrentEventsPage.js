@@ -1,25 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { addEvent } from '../eventsSlice';
 
 const CurrentEventsPage = () => {
-  const [events, setEvents] = useState([]);
+  const dispatch = useDispatch();
+  const { events } = useSelector((state) => state.events);
 
   useEffect(() => {
-    // TODO: This is a placeholder. The actual implementation will connect to the
-    // Supabase Realtime feed to display live event updates.
+    // Simulate a real-time feed
     const interval = setInterval(() => {
-      const newEvent = `Event at ${new Date().toLocaleTimeString()}`;
-      setEvents(prevEvents => [...prevEvents, newEvent]);
+      const newEvent = {
+        id: Date.now(),
+        name: `Event at ${new Date().toLocaleTimeString()}`,
+      };
+      dispatch(addEvent(newEvent));
     }, 5000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [dispatch]);
 
   return (
     <div>
       <h1>Current Events</h1>
       <ul>
-        {events.map((event, index) => (
-          <li key={index}>{event}</li>
+        {events.map((event) => (
+          <li key={event.id}>{event.name}</li>
         ))}
       </ul>
     </div>

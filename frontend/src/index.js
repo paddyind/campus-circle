@@ -5,7 +5,7 @@ import { store } from './app/store';
 import App from './App';
 
 if (process.env.REACT_APP_THEME === 'bootstrap') {
-  import('./styles/bootstrap.css');
+  import('bootstrap/dist/css/bootstrap.min.css');
 } else {
   import('./styles/tailwind.css');
 }

@@ -1,14 +1,17 @@
 import React from 'react';
 
-const RegistrationHistory = () => {
-  // This component will display the user's event registration history.
-  // For now, it's a placeholder.
+const RegistrationHistory = ({ events }) => {
+  if (!events || events.length === 0) {
+    return <p>No registration history.</p>;
+  }
+
   return (
     <div>
       <h2>Registration History</h2>
       <ul>
-        <li>Past Event 1</li>
-        <li>Past Event 2</li>
+        {events.map((event) => (
+          <li key={event.id}>{event.name}</li>
+        ))}
       </ul>
     </div>
   );

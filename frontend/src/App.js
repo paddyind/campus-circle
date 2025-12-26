@@ -6,11 +6,13 @@ import StudentRegisterPage from './features/auth/components/StudentRegisterPage'
 import ParentDashboard from './features/dashboard/components/ParentDashboard';
 import StudentDashboard from './features/dashboard/components/StudentDashboard';
 import CurrentEventsPage from './features/events/components/CurrentEventsPage';
+import SessionNotifier from './features/auth/components/SessionNotifier';
 
 function App() {
   return (
     <Router>
       <div className="App">
+        <SessionNotifier />
         <Routes>
           <Route path="/" element={<h1>Welcome to CampusCircle</h1>} />
           <Route path="/login" element={<LoginPage />} />
