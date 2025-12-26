@@ -4,9 +4,11 @@ import { Provider } from 'react-redux';
 import { store } from './app/store';
 import App from './App';
 
+// Import CSS - use Tailwind by default, Bootstrap if theme is set
 if (process.env.REACT_APP_THEME === 'bootstrap') {
   import('bootstrap/dist/css/bootstrap.min.css');
 } else {
+  // Import Tailwind CSS
   import('./styles/tailwind.css');
 }
 

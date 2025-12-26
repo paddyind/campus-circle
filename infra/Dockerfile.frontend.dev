@@ -15,6 +15,6 @@ COPY frontend/ ./
 # Expose development server port
 EXPOSE 3000
 
-# Start development server
-CMD ["npm", "start"]
+# Generate Tailwind CSS before starting
+CMD ["sh", "-c", "npm run build:tailwind && npm start"]
 

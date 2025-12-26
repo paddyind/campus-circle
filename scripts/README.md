@@ -93,7 +93,4 @@ A comprehensive Docker management script for starting, stopping, building, and m
    ./scripts/docker-manage.sh restart frontend
    ```
 
-## verify_docs_sync.sh
-
-Placeholder script for verifying documentation synchronization with code changes.
 
