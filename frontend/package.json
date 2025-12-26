@@ -15,9 +15,10 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build",
-    "build:tailwind": "npx tailwindcss -i ./src/index.css -o ./src/tailwind.css",
-    "build:bootstrap": "echo 'Bootstrap theme would be built here'",
+    "start:bootstrap": "REACT_APP_THEME=bootstrap react-scripts start",
+    "build": "npm run build:tailwind && react-scripts build",
+    "build:tailwind": "npx tailwindcss -i ./src/index.css -o ./src/styles/tailwind.css",
+    "build:bootstrap": "REACT_APP_THEME=bootstrap react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
