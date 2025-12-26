@@ -7,25 +7,50 @@ const initialState = {
   error: null,
 };
 
-// Mock async thunks for dashboard data
-export const fetchEvents = createAsyncThunk('dashboard/fetchEvents', async () => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve([
-        { id: 1, name: 'Parent-Teacher Conference' },
-        { id: 2, name: 'School Play' },
-        { id: 3, name: 'Science Fair' },
-      ]);
-    }, 1000);
-  });
+const API_BASE_URL = '/api'; // Placeholder for the actual API base URL
+
+export const fetchEvents = createAsyncThunk('dashboard/fetchEvents', async (_, { rejectWithValue }) => {
+  if (process.env.REACT_APP_USE_MOCK_API === 'true') {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve([
+          { id: 1, name: 'Parent-Teacher Conference' },
+          { id: 2, name: 'School Play' },
+          { id: 3, name: 'Science Fair' },
+        ]);
+      }, 1000);
+    });
+  } else {
+    try {
+      const response = await fetch(`${API_BASE_URL}/dashboard/events`);
+      if (!response.ok) {
+        throw new Error('Server error!');
+      }
+      return await response.json();
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
 });
 
-export const fetchProfile = createAsyncThunk('dashboard/fetchProfile', async () => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({ name: 'Test User', email: 'test@example.com' });
-    }, 1000);
-  });
+export const fetchProfile = createAsyncThunk('dashboard/fetchProfile', async (_, { rejectWithValue }) => {
+  if (process.env.REACT_APP_USE_MOCK_API === 'true') {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve({ name: 'Test User', email: 'test@example.com' });
+      }, 1000);
+    });
+  } else {
+    try {
+      const response = await fetch(`${API_BASE_URL}/dashboard/profile`);
+      if (!response.ok) {
+        throw new Error('Server error!');
+      }
+      return await response.json();
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
 });
 
 const dashboardSlice = createSlice({

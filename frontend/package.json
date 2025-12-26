@@ -44,6 +44,5 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.1"
   },
-  "main": "src/index.js",
-  "bootstrap": "dist/css/bootstrap.css"
+  "main": "src/index.js"
 }
