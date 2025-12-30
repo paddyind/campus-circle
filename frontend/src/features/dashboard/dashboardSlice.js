@@ -1,57 +1,52 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 
-const initialState = {
-  events: [],
-  profile: null,
-  status: 'idle',
-  error: null,
+const mockProfile = {
+  parent: {
+    id: 'a1b2c3d4-e5f6-7890-1234-567890abcdef',
+    full_name: 'John Doe',
+    email: 'parent@test.com',
+    phone: '123-456-7890',
+    role: 'parent'
+  },
+  student: {
+    id: 'b2c3d4e5-f6a7-8901-2345-67890abcdef0',
+    full_name: 'Jane Doe',
+    email: 'student@test.com',
+    dob: '2010-05-15',
+    role: 'student'
+  }
 };
 
-const API_BASE_URL = '/api'; // Placeholder for the actual API base URL
-
-export const fetchEvents = createAsyncThunk('dashboard/fetchEvents', async (_, { rejectWithValue }) => {
-  if (process.env.REACT_APP_USE_MOCK_API === 'true') {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve([
-          { id: 1, name: 'Parent-Teacher Conference' },
-          { id: 2, name: 'School Play' },
-          { id: 3, name: 'Science Fair' },
-        ]);
-      }, 1000);
-    });
-  } else {
-    try {
-      const response = await fetch(`${API_BASE_URL}/dashboard/events`);
-      if (!response.ok) {
-        throw new Error('Server error!');
-      }
-      return await response.json();
-    } catch (error) {
-      return rejectWithValue(error.message);
-    }
+export const fetchProfile = createAsyncThunk(
+  'dashboard/fetchProfile',
+  async (_, { getState }) => {
+    const { user } = getState().auth;
+    const profile = user?.role === 'parent' ? mockProfile.parent : mockProfile.student;
+    return new Promise(resolve => setTimeout(() => resolve(profile), 500));
   }
-});
+);
 
-export const fetchProfile = createAsyncThunk('dashboard/fetchProfile', async (_, { rejectWithValue }) => {
-  if (process.env.REACT_APP_USE_MOCK_API === 'true') {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({ name: 'Test User', email: 'test@example.com' });
-      }, 1000);
-    });
-  } else {
-    try {
-      const response = await fetch(`${API_BASE_URL}/dashboard/profile`);
-      if (!response.ok) {
-        throw new Error('Server error!');
+export const fetchMyEvents = createAsyncThunk(
+  'dashboard/fetchMyEvents',
+  async () => {
+    return new Promise(resolve => setTimeout(() => resolve([
+      {
+        id: '2',
+        title: 'Parent-Teacher Conference',
+        description: 'Meet with teachers to discuss student progress and academic performance',
+        date: '2024-10-01',
+        location: 'School Campus',
       }
-      return await response.json();
-    } catch (error) {
-      return rejectWithValue(error.message);
-    }
+    ]), 500));
   }
-});
+);
+
+const initialState = {
+  profile: null,
+  events: [],
+  loading: false,
+  error: null,
+};
 
 const dashboardSlice = createSlice({
   name: 'dashboard',
@@ -59,19 +54,29 @@ const dashboardSlice = createSlice({
   reducers: {},
   extraReducers: (builder) => {
     builder
-      .addCase(fetchEvents.pending, (state) => {
-        state.status = 'loading';
-      })
-      .addCase(fetchEvents.fulfilled, (state, action) => {
-        state.status = 'succeeded';
-        state.events = action.payload;
-      })
-      .addCase(fetchEvents.rejected, (state, action) => {
-        state.status = 'failed';
-        state.error = action.error.message;
+      .addCase(fetchProfile.pending, (state) => {
+        state.loading = true;
+        state.error = null;
       })
       .addCase(fetchProfile.fulfilled, (state, action) => {
+        state.loading = false;
         state.profile = action.payload;
+      })
+      .addCase(fetchProfile.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(fetchMyEvents.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchMyEvents.fulfilled, (state, action) => {
+        state.loading = false;
+        state.events = action.payload;
+      })
+      .addCase(fetchMyEvents.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
       });
   },
 });

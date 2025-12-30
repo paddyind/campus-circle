@@ -8,8 +8,12 @@ import ParentRegisterPage from './features/auth/components/ParentRegisterPage';
 import StudentRegisterPage from './features/auth/components/StudentRegisterPage';
 import ParentDashboard from './features/dashboard/components/ParentDashboard';
 import StudentDashboard from './features/dashboard/components/StudentDashboard';
+import MyEventsPage from './features/dashboard/components/MyEventsPage';
 import CurrentEventsPage from './features/events/components/CurrentEventsPage';
+import EventDetailPage from './features/events/components/EventDetailPage';
 import SessionNotifier from './features/auth/components/SessionNotifier';
+import HelpPage from './features/auth/components/HelpPage';
+import AboutPage from './components/AboutPage';
 import { fetchEvents } from './features/events/eventsSlice';
 
 function HomePage() {
@@ -17,8 +21,10 @@ function HomePage() {
   const { events, loading } = useSelector((state) => state.events);
 
   useEffect(() => {
-    dispatch(fetchEvents());
-  }, [dispatch]);
+    if (events.length === 0) {
+      dispatch(fetchEvents());
+    }
+  }, [dispatch, events.length]);
 
   // Use mock events if API returns empty or fails
   const mockEvents = [
@@ -70,7 +76,7 @@ function HomePage() {
           </h2>
           {currentEvents.length > 0 && (
             <Link
-              to="/events/current"
+              to="/events"
               className="text-indigo-600 hover:text-indigo-700 font-semibold text-sm"
             >
               View All Events →
@@ -149,7 +155,7 @@ function HomePage() {
             <h3 className="text-xl font-semibold text-gray-900 mb-2">No Events Scheduled</h3>
             <p className="text-gray-600 mb-6">Check back later for upcoming campus events.</p>
             <Link
-              to="/events/current"
+              to="/events"
               className="inline-block bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-indigo-700 transition-colors"
             >
               View All Events
@@ -175,9 +181,11 @@ function App() {
           <Route path="/register/student" element={<StudentRegisterPage />} />
           <Route path="/dashboard/parent" element={<ParentDashboard />} />
           <Route path="/dashboard/student" element={<StudentDashboard />} />
-          <Route path="/events/current" element={<CurrentEventsPage />} />
-          <Route path="/about" element={<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full"><h1 className="text-3xl font-bold mb-4">About Us</h1><p className="text-gray-600">CampusCircle is a platform designed to connect schools, parents, and students.</p></div>} />
-          <Route path="/help" element={<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full"><h1 className="text-3xl font-bold mb-4">Help</h1><p className="text-gray-600">Need assistance? Contact our support team.</p></div>} />
+          <Route path="/my-events" element={<MyEventsPage />} />
+          <Route path="/events" element={<CurrentEventsPage />} />
+          <Route path="/events/:id" element={<EventDetailPage />} />
+          <Route path="/about" element={<AboutPage />} />
+          <Route path="/help" element={<HelpPage />} />
           <Route path="/contact" element={<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full"><h1 className="text-3xl font-bold mb-4">Contact Us</h1><p className="text-gray-600">Get in touch with us for any questions or support.</p></div>} />
           <Route path="/privacy" element={<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full"><h1 className="text-3xl font-bold mb-4">Privacy Policy</h1><p className="text-gray-600">Our privacy policy and data protection practices.</p></div>} />
           <Route path="/security" element={<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full"><h1 className="text-3xl font-bold mb-4">Security</h1><p className="text-gray-600">Information about our security measures.</p></div>} />
