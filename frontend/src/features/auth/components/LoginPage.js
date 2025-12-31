@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { loginUser } from '../authSlice';
 
 const LoginPage = () => {
@@ -8,12 +8,16 @@ const LoginPage = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const dispatch = useDispatch();
-  const { status, error } = useSelector((state) => state.auth);
+  const { status, error, isAuthenticated } = useSelector((state) => state.auth);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     dispatch(loginUser({ email, password }));
   };
+
+  if (isAuthenticated) {
+    return <Navigate to="/" />;
+  }
 
   return (
     <div className="w-full flex items-center justify-center bg-gradient-to-br from-indigo-50 via-white to-purple-50 py-12 px-4 sm:px-6 lg:px-8 min-h-full">

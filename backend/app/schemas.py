@@ -46,3 +46,21 @@ class Event(EventCreate):
 
     class Config:
         orm_mode = True
+
+class UserProfile(UserBase):
+    id: str
+    role: str
+    phone: Optional[str] = None
+    dob: Optional[date] = None
+    school_id: Optional[str] = None
+    class_id: Optional[str] = None
+
+    class Config:
+        orm_mode = True
+
+class EventRegistration(BaseModel):
+    user_id: str
+    event_id: str
+
+    class Config:
+        orm_mode = True

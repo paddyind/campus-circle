@@ -1,87 +1,49 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 
+const mockUsers = {
+  'parent@test.com': { user: { email: 'parent@test.com', name: 'John Doe', role: 'parent' }, token: 'fake-parent-token' },
+  'student@test.com': { user: { email: 'student@test.com', name: 'Jane Doe', role: 'student' }, token: 'fake-student-token' },
+};
+
+export const loginUser = createAsyncThunk('auth/loginUser', async (credentials) => {
+  return new Promise((resolve, reject) => {
+    setTimeout(() => {
+      if (mockUsers[credentials.email]) {
+        resolve(mockUsers[credentials.email]);
+      } else {
+        reject({ message: 'Invalid credentials' });
+      }
+    }, 500);
+  });
+});
+
+export const registerParent = createAsyncThunk('auth/registerParent', async (userData) => {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      const newUser = { user: { email: userData.email, name: userData.name, role: 'parent' }, token: 'fake-parent-token' };
+      mockUsers[userData.email] = newUser;
+      resolve(newUser);
+    }, 500);
+  });
+});
+
+export const registerStudent = createAsyncThunk('auth/registerStudent', async (userData) => {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      const newUser = { user: { email: userData.email, name: userData.name, role: 'student' }, token: 'fake-student-token' };
+      mockUsers[userData.email] = newUser;
+      resolve(newUser);
+    }, 500);
+  });
+});
+
 const initialState = {
   user: null,
   token: null,
   isAuthenticated: false,
-  status: 'idle', // 'idle' | 'loading' | 'succeeded' | 'failed'
+  status: 'idle',
   error: null,
 };
-
-const API_BASE_URL = '/api'; // Placeholder for the actual API base URL
-
-export const loginUser = createAsyncThunk('auth/loginUser', async (credentials, { rejectWithValue }) => {
-  if (process.env.REACT_APP_USE_MOCK_API === 'true') {
-    // Simulate an API call
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({ user: { email: credentials.email, name: 'Test User' }, token: 'fake-token' });
-      }, 1000);
-    });
-  } else {
-    try {
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(credentials),
-      });
-      if (!response.ok) {
-        throw new Error('Server error!');
-      }
-      return await response.json();
-    } catch (error) {
-      return rejectWithValue(error.message);
-    }
-  }
-});
-
-export const registerParent = createAsyncThunk('auth/registerParent', async (userData, { rejectWithValue }) => {
-  if (process.env.REACT_APP_USE_MOCK_API === 'true') {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({ user: { email: userData.email, name: userData.name }, token: 'fake-token' });
-      }, 1000);
-    });
-  } else {
-    try {
-      const response = await fetch(`${API_BASE_URL}/auth/register/parent`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(userData),
-      });
-      if (!response.ok) {
-        throw new Error('Server error!');
-      }
-      return await response.json();
-    } catch (error) {
-      return rejectWithValue(error.message);
-    }
-  }
-});
-
-export const registerStudent = createAsyncThunk('auth/registerStudent', async (userData, { rejectWithValue }) => {
-  if (process.env.REACT_APP_USE_MOCK_API === 'true') {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({ user: { email: userData.email, name: userData.name }, token: 'fake-token' });
-      }, 1000);
-    });
-  } else {
-    try {
-      const response = await fetch(`${API_BASE_URL}/auth/register/student`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(userData),
-      });
-      if (!response.ok) {
-        throw new Error('Server error!');
-      }
-      return await response.json();
-    } catch (error) {
-      return rejectWithValue(error.message);
-    }
-  }
-});
 
 const authSlice = createSlice({
   name: 'auth',
