@@ -1,43 +1,68 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 
-const mockProfile = {
-  parent: {
-    id: 'a1b2c3d4-e5f6-7890-1234-567890abcdef',
-    full_name: 'John Doe',
-    email: 'parent@test.com',
-    phone: '123-456-7890',
-    role: 'parent'
-  },
-  student: {
-    id: 'b2c3d4e5-f6a7-8901-2345-67890abcdef0',
-    full_name: 'Jane Doe',
-    email: 'student@test.com',
-    dob: '2010-05-15',
-    role: 'student'
-  }
-};
-
 export const fetchProfile = createAsyncThunk(
   'dashboard/fetchProfile',
-  async (_, { getState }) => {
-    const { user } = getState().auth;
-    const profile = user?.role === 'parent' ? mockProfile.parent : mockProfile.student;
-    return new Promise(resolve => setTimeout(() => resolve(profile), 500));
+  async (_, { getState, rejectWithValue }) => {
+    try {
+      const { token } = getState().auth;
+      if (!token) {
+        return rejectWithValue('Not authenticated');
+      }
+
+      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+      const base = API_BASE_URL.endsWith('/api') ? API_BASE_URL : `${API_BASE_URL}/api`;
+      const response = await fetch(`${base}/users/me`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Failed to fetch profile' }));
+        return rejectWithValue(errorData.detail || 'Failed to fetch profile');
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        return rejectWithValue('Unable to connect to server. Please check your connection.');
+      }
+      return rejectWithValue(error.message || 'Failed to fetch profile');
+    }
   }
 );
 
 export const fetchMyEvents = createAsyncThunk(
   'dashboard/fetchMyEvents',
-  async () => {
-    return new Promise(resolve => setTimeout(() => resolve([
-      {
-        id: '2',
-        title: 'Parent-Teacher Conference',
-        description: 'Meet with teachers to discuss student progress and academic performance',
-        date: '2024-10-01',
-        location: 'School Campus',
+  async (_, { getState, rejectWithValue }) => {
+    try {
+      const { token } = getState().auth;
+      if (!token) {
+        return rejectWithValue('Not authenticated');
       }
-    ]), 500));
+
+      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+      const base = API_BASE_URL.endsWith('/api') ? API_BASE_URL : `${API_BASE_URL}/api`;
+      const response = await fetch(`${base}/users/me/events`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Failed to fetch events' }));
+        return rejectWithValue(errorData.detail || 'Failed to fetch events');
+      }
+
+      const data = await response.json();
+      return data || [];
+    } catch (error) {
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        return rejectWithValue('Unable to connect to server. Please check your connection.');
+      }
+      return rejectWithValue(error.message || 'Failed to fetch events');
+    }
   }
 );
 

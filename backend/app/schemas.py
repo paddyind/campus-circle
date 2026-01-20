@@ -40,12 +40,14 @@ class EventCreate(BaseModel):
     end_time: Optional[str] = None
     location: Optional[str] = None
     school_id: Optional[str] = None
+    max_registrations: Optional[int] = None
 
 class Event(EventCreate):
     id: str
+    current_registrations: Optional[int] = 0
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class UserProfile(UserBase):
     id: str
@@ -56,11 +58,57 @@ class UserProfile(UserBase):
     class_id: Optional[str] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class EventRegistration(BaseModel):
     user_id: str
     event_id: str
 
     class Config:
-        orm_mode = True
+        from_attributes = True
+
+class ProfileUpdate(BaseModel):
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    dob: Optional[date] = None
+
+class ContactSubmission(BaseModel):
+    submission_type: str  # feedback, complaint, suggestion, general
+    subject: str
+    message: str
+    related_event_id: Optional[str] = None
+    related_organizer_id: Optional[str] = None
+
+class ContactSubmissionResponse(BaseModel):
+    id: str
+    submission_type: str
+    subject: str
+    message: str
+    status: str
+    created_at: str
+
+    class Config:
+        from_attributes = True
+
+class ChildCreate(BaseModel):
+    """Schema for adding a child under 14 (no login account needed)"""
+    full_name: str
+    dob: date
+    email: Optional[str] = None  # Optional, defaults to parent's email
+    school_id: Optional[str] = None
+    class_id: Optional[str] = None
+
+class ChildUpdate(BaseModel):
+    """Schema for updating child information"""
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    dob: Optional[date] = None
+    school_id: Optional[str] = None
+    class_id: Optional[str] = None
+
+class EventRegistrationRequest(BaseModel):
+    """Schema for event registration with optional student_id for parents"""
+    student_id: Optional[str] = None  # Required for parents, not needed for students
+    
+    class Config:
+        from_attributes = True

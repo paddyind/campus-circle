@@ -1,15 +1,26 @@
 from fastapi import FastAPI, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from app.auth.middleware import AuthMiddleware
 from app.auth.dependencies import get_current_user
 from app.auth.roles import RoleChecker
-from app.api import users, events
+from app.api import users, events, admin
 
-app = FastAPI()
+app = FastAPI(redirect_slashes=False)
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://localhost:80", "http://localhost"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.add_middleware(AuthMiddleware)
 
-app.include_router(users.router, prefix="/users", tags=["users"])
-app.include_router(events.router, prefix="/events", tags=["events"])
+app.include_router(users.router, prefix="/api/users", tags=["users"])
+app.include_router(events.router, prefix="/api/events", tags=["events"])
+app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 
 @app.get("/")
 def read_root():

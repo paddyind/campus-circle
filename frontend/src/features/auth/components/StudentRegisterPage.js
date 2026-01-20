@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { Link } from 'react-router-dom';
-import { registerStudent } from '../authSlice';
+import { Link, useLocation } from 'react-router-dom';
+import { registerStudent, clearError } from '../authSlice';
 
 const StudentRegisterPage = () => {
   const [age, setAge] = useState('');
@@ -14,13 +14,21 @@ const StudentRegisterPage = () => {
   const [ageError, setAgeError] = useState('');
   const [errors, setErrors] = useState({});
   const dispatch = useDispatch();
+  const location = useLocation();
   const { status, error } = useSelector((state) => state.auth);
+
+  // Clear errors when component mounts or pathname changes
+  useEffect(() => {
+    dispatch(clearError());
+  }, [dispatch, location.pathname]);
 
   const handleAgeCheck = (e) => {
     const newAge = e.target.value;
     setAge(newAge);
     if (newAge && newAge < 14) {
-      setAgeError('Students under 14 must be registered by a parent.');
+      setAgeError('You must be at least 14 years old to create your own account. Please ask your parent to add you through their account.');
+    } else if (newAge && newAge >= 14) {
+      setAgeError('');
     } else {
       setAgeError('');
     }
@@ -28,9 +36,13 @@ const StudentRegisterPage = () => {
 
   const validateForm = () => {
     const newErrors = {};
+    const ageNum = parseInt(age);
     
-    if (!age || age < 14) {
-      newErrors.age = 'You must be at least 14 years old to register';
+    // Strict age validation - must be 14 or older
+    if (!age || isNaN(ageNum) || ageNum < 14) {
+      newErrors.age = 'You must be at least 14 years old to create your own account. Please ask your parent to add you through their account.';
+      setErrors(newErrors);
+      return false; // Don't proceed with other validations if age is invalid
     }
     
     if (!name.trim()) {
@@ -61,6 +73,14 @@ const StudentRegisterPage = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    const ageNum = parseInt(age);
+    
+    // Double-check age before submission
+    if (!age || isNaN(ageNum) || ageNum < 14) {
+      setAgeError('You must be at least 14 years old to create your own account. Please ask your parent to add you through their account.');
+      return;
+    }
+    
     if (validateForm()) {
       dispatch(registerStudent({ name, email, password, age }));
     }
@@ -86,6 +106,12 @@ const StudentRegisterPage = () => {
               Sign in
             </Link>
           </p>
+          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-sm text-gray-700">
+              <strong>Note:</strong> This page is for students <strong>14 years and older</strong> to create their own accounts.
+              If you are under 14, please ask your parent to add you through their account.
+            </p>
+          </div>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="space-y-4">
@@ -108,7 +134,14 @@ const StudentRegisterPage = () => {
                 placeholder="Enter your age"
               />
               {(errors.age || ageError) && (
-                <p className="mt-1 text-sm text-red-600">{errors.age || ageError}</p>
+                <div className="mt-1 p-2 bg-red-50 border border-red-200 rounded">
+                  <p className="text-sm text-red-600">{errors.age || ageError}</p>
+                  {age && age < 14 && (
+                    <p className="text-xs text-red-500 mt-1">
+                      Parents can add children under 14 through the Profile page or when registering for events.
+                    </p>
+                  )}
+                </div>
               )}
             </div>
 

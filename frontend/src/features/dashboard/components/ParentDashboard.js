@@ -34,19 +34,52 @@ const ParentDashboard = () => {
       )}
 
       <div className="bg-white shadow-lg rounded-lg p-8">
-        <h2 className="text-2xl font-semibold text-gray-800 mb-4">My Registered Events</h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-2xl font-semibold text-gray-800">Events You're Registered For</h2>
+          <Link 
+            to="/events" 
+            className="text-indigo-600 hover:text-indigo-700 font-semibold text-sm"
+          >
+            Browse All Events →
+          </Link>
+        </div>
         {events.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {events.map((event) => (
-              <div key={event.id} className="bg-gray-50 rounded-xl p-6">
+              <div key={event.id} className="bg-gray-50 rounded-xl p-6 hover:shadow-md transition-shadow">
                 <h3 className="text-xl font-bold text-gray-900 mb-2">{event.title}</h3>
-                <p className="text-gray-600 text-sm mb-4">{event.description}</p>
-                <Link to={`/events/${event.id}`} className="text-indigo-600 hover:underline">View Details</Link>
+                <p className="text-gray-600 text-sm mb-4 line-clamp-2">{event.description}</p>
+                {event.start_time && (
+                  <p className="text-gray-500 text-xs mb-3">
+                    {new Date(event.start_time).toLocaleDateString('en-US', { 
+                      weekday: 'short', 
+                      year: 'numeric', 
+                      month: 'short', 
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </p>
+                )}
+                <Link 
+                  to={`/events/${event.id}`} 
+                  className="inline-block text-indigo-600 hover:text-indigo-700 font-semibold text-sm"
+                >
+                  View Details →
+                </Link>
               </div>
             ))}
           </div>
         ) : (
-          <p>You have not registered for any events yet.</p>
+          <div className="text-center py-8">
+            <p className="text-gray-600 mb-4">You haven't registered for any events yet.</p>
+            <Link 
+              to="/events" 
+              className="inline-block bg-indigo-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-indigo-700 transition-colors"
+            >
+              Browse Events
+            </Link>
+          </div>
         )}
       </div>
     </div>

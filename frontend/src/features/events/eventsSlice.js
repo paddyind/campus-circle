@@ -1,58 +1,91 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { fetchMyEvents } from '../dashboard/dashboardSlice';
 
-const mockEvents = [
-  {
-    id: '1',
-    title: 'Annual Science Fair',
-    description: 'Showcase of student science projects and innovations',
-    date: '2024-09-15',
-    start_time: '10:00',
-    end_time: '14:00',
-    location: 'Main Auditorium',
-    status: 'upcoming'
-  },
-  {
-    id: '2',
-    title: 'Parent-Teacher Conference',
-    description: 'Meet with teachers to discuss student progress and academic performance',
-    date: '2024-10-01',
-    start_time: '08:00',
-    end_time: '17:00',
-    location: 'School Campus',
-    status: 'upcoming'
-  },
-  {
-    id: '3',
-    title: 'Sports Day',
-    description: 'Annual inter-house sports competition',
-    date: '2024-08-25',
-    start_time: '09:00',
-    end_time: '16:00',
-    location: 'Sports Ground',
-    status: 'past'
-  }
-];
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+
+// Helper to build API URL (handles both with and without /api in base URL)
+const getApiUrl = (endpoint) => {
+  const base = API_BASE_URL.endsWith('/api') ? API_BASE_URL : `${API_BASE_URL}/api`;
+  return `${base}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+};
 
 export const fetchEvents = createAsyncThunk(
   'events/fetchEvents',
-  async () => {
-    return new Promise(resolve => setTimeout(() => resolve(mockEvents), 500));
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await fetch(getApiUrl('/events/'));
+      if (!response.ok) {
+        throw new Error('Failed to fetch events');
+      }
+      const data = await response.json();
+      return data || [];
+    } catch (error) {
+      return rejectWithValue(error.message || 'Failed to load events');
+    }
   }
 );
 
 export const fetchEventById = createAsyncThunk(
   'events/fetchEventById',
-  async (eventId) => {
-    const event = mockEvents.find(e => e.id === eventId);
-    return new Promise(resolve => setTimeout(() => resolve(event), 500));
+  async (eventId, { rejectWithValue }) => {
+    try {
+      const response = await fetch(getApiUrl(`/events/${eventId}`));
+      if (!response.ok) {
+        throw new Error('Event not found');
+      }
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      return rejectWithValue(error.message || 'Failed to load event');
+    }
   }
 );
 
 export const registerForEvent = createAsyncThunk(
   'events/registerForEvent',
-  async (eventId) => {
-    return new Promise(resolve => setTimeout(() => resolve(eventId), 500));
+  async ({ eventId, studentId = null }, { getState, rejectWithValue }) => {
+    try {
+      const { token } = getState().auth;
+      if (!token) {
+        return rejectWithValue('Please login to register for events');
+      }
+
+      if (!eventId) {
+        return rejectWithValue('Event ID is required');
+      }
+
+      // For parents, always send student_id in body; for students, send empty object
+      const body = studentId ? { student_id: studentId } : {};
+
+      const response = await fetch(getApiUrl(`/users/events/${eventId}/register`), {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Registration failed' }));
+        const errorMessage = errorData.detail || 'Failed to register for event';
+        
+        // If already registered, treat it as success and return the event ID
+        if (response.status === 400 && errorMessage.includes('already registered')) {
+          return eventId; // Return event ID so it gets added to registeredEvents
+        }
+        
+        return rejectWithValue(errorMessage);
+      }
+
+      const data = await response.json();
+      return data.event_id || eventId;
+    } catch (error) {
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        return rejectWithValue('Unable to connect to server. Please check your connection.');
+      }
+      return rejectWithValue(error.message || 'Failed to register for event');
+    }
   }
 );
 
@@ -99,10 +132,20 @@ const eventsSlice = createSlice({
         state.error = action.payload;
       })
       .addCase(fetchMyEvents.fulfilled, (state, action) => {
-        state.registeredEvents = ['2'];
+        // Extract event IDs from the events array
+        state.registeredEvents = action.payload ? action.payload.map(event => event.id) : [];
       })
       .addCase(registerForEvent.fulfilled, (state, action) => {
-        state.registeredEvents.push(action.payload);
+        // Add event ID to registeredEvents if not already present
+        if (action.payload && !state.registeredEvents.includes(action.payload)) {
+          state.registeredEvents.push(action.payload);
+        }
+        // Clear error on successful registration
+        state.error = null;
+      })
+      .addCase(registerForEvent.rejected, (state, action) => {
+        // Set error message for failed registration
+        state.error = action.payload;
       });
   },
 });

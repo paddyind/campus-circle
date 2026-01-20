@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
@@ -8,17 +8,39 @@ import ParentRegisterPage from './features/auth/components/ParentRegisterPage';
 import StudentRegisterPage from './features/auth/components/StudentRegisterPage';
 import ParentDashboard from './features/dashboard/components/ParentDashboard';
 import StudentDashboard from './features/dashboard/components/StudentDashboard';
+import AdminDashboard from './features/dashboard/components/AdminDashboard';
 import MyEventsPage from './features/dashboard/components/MyEventsPage';
 import CurrentEventsPage from './features/events/components/CurrentEventsPage';
 import EventDetailPage from './features/events/components/EventDetailPage';
+import ProfilePage from './features/profile/components/ProfilePage';
 import SessionNotifier from './features/auth/components/SessionNotifier';
 import HelpPage from './features/auth/components/HelpPage';
+import ContactPage from './features/contact/components/ContactPage';
 import AboutPage from './components/AboutPage';
+import ManageUsers from './features/admin/components/ManageUsers';
+import ManageEvents from './features/admin/components/ManageEvents';
 import { fetchEvents } from './features/events/eventsSlice';
+import { setCredentials } from './features/auth/authSlice';
+import { fetchProfile } from './features/dashboard/dashboardSlice';
+
+// Protected Route Component
+const ProtectedRoute = ({ children }) => {
+  const { token } = useSelector((state) => state.auth);
+  return token ? children : <Navigate to="/login" replace />;
+};
 
 function HomePage() {
   const dispatch = useDispatch();
   const { events, loading } = useSelector((state) => state.events);
+  const { token, user } = useSelector((state) => state.auth);
+  const { profile } = useSelector((state) => state.dashboard);
+  const isAdmin = user?.role === 'admin' || profile?.role === 'admin';
+
+  useEffect(() => {
+    if (token && !profile) {
+      dispatch(fetchProfile());
+    }
+  }, [token, profile, dispatch]);
 
   useEffect(() => {
     if (events.length === 0) {
@@ -26,35 +48,8 @@ function HomePage() {
     }
   }, [dispatch, events.length]);
 
-  // Use mock events if API returns empty or fails
-  const mockEvents = [
-    {
-      id: 1,
-      title: 'Annual Science Fair',
-      description: 'Showcase of student science projects and innovations',
-      date: '2024-01-15',
-      location: 'Main Auditorium',
-      status: 'upcoming'
-    },
-    {
-      id: 2,
-      title: 'Parent-Teacher Conference',
-      description: 'Meet with teachers to discuss student progress and academic performance',
-      date: '2024-01-20',
-      location: 'School Campus',
-      status: 'upcoming'
-    },
-    {
-      id: 3,
-      title: 'Sports Day',
-      description: 'Annual inter-house sports competition',
-      date: '2024-01-25',
-      location: 'Sports Ground',
-      status: 'upcoming'
-    }
-  ];
-
-  const currentEvents = events.length > 0 ? events : mockEvents;
+  // Only use real events from API, no mock events
+  const currentEvents = events;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -116,12 +111,21 @@ function HomePage() {
                       <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
-                      {new Date(event.date).toLocaleDateString('en-US', { 
-                        weekday: 'long', 
-                        year: 'numeric', 
-                        month: 'long', 
-                        day: 'numeric' 
-                      })}
+                      {event.start_time ? (
+                        new Date(event.start_time).toLocaleDateString('en-US', { 
+                          weekday: 'long', 
+                          year: 'numeric', 
+                          month: 'long', 
+                          day: 'numeric' 
+                        })
+                      ) : event.date ? (
+                        new Date(event.date).toLocaleDateString('en-US', { 
+                          weekday: 'long', 
+                          year: 'numeric', 
+                          month: 'long', 
+                          day: 'numeric' 
+                        })
+                      ) : 'Date TBD'}
                     </div>
                     <div className="flex items-center text-gray-600 text-sm">
                       <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -139,37 +143,92 @@ function HomePage() {
                     >
                       View Details
                     </Link>
-                    <button className="flex-1 bg-white border-2 border-indigo-600 text-indigo-600 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-50 transition-colors">
-                      Register
-                    </button>
+                    {token && !isAdmin && (
+                      <Link
+                        to={`/events/${event.id}`}
+                        className="flex-1 bg-white border-2 border-indigo-600 text-indigo-600 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-50 transition-colors text-center"
+                      >
+                        Register
+                      </Link>
+                    )}
+                    {!token && (
+                      <Link
+                        to="/login"
+                        className="flex-1 bg-white border-2 border-indigo-600 text-indigo-600 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-50 transition-colors text-center"
+                      >
+                        Register
+                      </Link>
+                    )}
                   </div>
                 </div>
               </div>
             ))}
           </div>
-        ) : (
-          <div className="bg-white rounded-xl shadow-lg p-12 text-center">
-            <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">No Events Scheduled</h3>
-            <p className="text-gray-600 mb-6">Check back later for upcoming campus events.</p>
-            <Link
-              to="/events"
-              className="inline-block bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-indigo-700 transition-colors"
-            >
-              View All Events
-            </Link>
-          </div>
-        )}
+                    ) : (
+                      <div className="bg-white rounded-xl shadow-lg p-12 text-center">
+                        <svg className="mx-auto h-16 w-16 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        <h3 className="text-2xl font-semibold text-gray-900 mb-3">No Upcoming Events</h3>
+                        <p className="text-gray-600 mb-2">There are currently no upcoming events scheduled.</p>
+                        <p className="text-gray-500 text-sm mb-6">New events will appear here once they are published by event organizers.</p>
+                        <Link
+                          to="/events"
+                          className="inline-block bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-indigo-700 transition-colors"
+                        >
+                          View All Events
+                        </Link>
+                      </div>
+                    )}
       </div>
     </div>
   );
 }
 
 function App() {
+  const dispatch = useDispatch();
+  const { token } = useSelector((state) => state.auth);
+
+  // Restore user session from localStorage on app load
+  useEffect(() => {
+    const storedToken = localStorage.getItem('token');
+    if (storedToken && !token) {
+      // Token exists in localStorage but not in Redux - restore it
+      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+      const base = API_BASE_URL.endsWith('/api') ? API_BASE_URL : `${API_BASE_URL}/api`;
+      fetch(`${base}/users/me`, {
+        headers: {
+          'Authorization': `Bearer ${storedToken}`,
+        },
+      })
+        .then((response) => {
+          if (response.ok) {
+            return response.json();
+          }
+          localStorage.removeItem('token');
+          return null;
+        })
+        .then((profile) => {
+          if (profile) {
+            dispatch(setCredentials({
+              user: {
+                id: profile.id,
+                email: profile.email,
+                name: profile.full_name,
+                role: profile.role,
+              },
+              token: storedToken,
+            }));
+          }
+        })
+        .catch(() => {
+          localStorage.removeItem('token');
+        });
+    }
+  }, [dispatch, token]);
+
   return (
-    <Router>
+    <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <div className="App min-h-screen bg-gray-50 flex flex-col">
         <Navbar />
         <SessionNotifier />
@@ -179,14 +238,74 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register/parent" element={<ParentRegisterPage />} />
           <Route path="/register/student" element={<StudentRegisterPage />} />
-          <Route path="/dashboard/parent" element={<ParentDashboard />} />
-          <Route path="/dashboard/student" element={<StudentDashboard />} />
-          <Route path="/my-events" element={<MyEventsPage />} />
+          <Route 
+            path="/dashboard/parent" 
+            element={
+              <ProtectedRoute>
+                <ParentDashboard />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/dashboard/student" 
+            element={
+              <ProtectedRoute>
+                <StudentDashboard />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/dashboard/admin" 
+            element={
+              <ProtectedRoute>
+                <AdminDashboard />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/my-events" 
+            element={
+              <ProtectedRoute>
+                <MyEventsPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/profile" 
+            element={
+              <ProtectedRoute>
+                <ProfilePage />
+              </ProtectedRoute>
+            } 
+          />
           <Route path="/events" element={<CurrentEventsPage />} />
           <Route path="/events/:id" element={<EventDetailPage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/help" element={<HelpPage />} />
-          <Route path="/contact" element={<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full"><h1 className="text-3xl font-bold mb-4">Contact Us</h1><p className="text-gray-600">Get in touch with us for any questions or support.</p></div>} />
+          <Route 
+            path="/contact" 
+            element={
+              <ProtectedRoute>
+                <ContactPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/admin/users" 
+            element={
+              <ProtectedRoute>
+                <ManageUsers />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/admin/events" 
+            element={
+              <ProtectedRoute>
+                <ManageEvents />
+              </ProtectedRoute>
+            } 
+          />
           <Route path="/privacy" element={<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full"><h1 className="text-3xl font-bold mb-4">Privacy Policy</h1><p className="text-gray-600">Our privacy policy and data protection practices.</p></div>} />
           <Route path="/security" element={<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full"><h1 className="text-3xl font-bold mb-4">Security</h1><p className="text-gray-600">Information about our security measures.</p></div>} />
           <Route path="/terms" element={<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full"><h1 className="text-3xl font-bold mb-4">Terms of Service</h1><p className="text-gray-600">Terms and conditions for using CampusCircle.</p></div>} />

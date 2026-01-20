@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { Link } from 'react-router-dom';
-import { registerParent } from '../authSlice';
+import { Link, useLocation } from 'react-router-dom';
+import { registerParent, clearError } from '../authSlice';
 
 const ParentRegisterPage = () => {
   const [name, setName] = useState('');
@@ -12,7 +12,13 @@ const ParentRegisterPage = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState({});
   const dispatch = useDispatch();
+  const location = useLocation();
   const { status, error } = useSelector((state) => state.auth);
+
+  // Clear errors when component mounts or pathname changes
+  useEffect(() => {
+    dispatch(clearError());
+  }, [dispatch, location.pathname]);
 
   const validateForm = () => {
     const newErrors = {};

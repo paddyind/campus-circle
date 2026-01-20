@@ -1,21 +1,23 @@
 -- 001_init_schema.sql
--- Create auth schema for local development (Supabase has this built-in)
-CREATE SCHEMA IF NOT EXISTS auth;
+-- Create isolated auth schema for Campus Circle
+CREATE SCHEMA IF NOT EXISTS campus_circle_auth;
 
--- Create auth.users table for local development
-CREATE TABLE IF NOT EXISTS auth.users (
+-- Create campus_circle_auth.users table (isolated for Campus Circle)
+CREATE TABLE IF NOT EXISTS campus_circle_auth.users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email TEXT UNIQUE,
+  email TEXT UNIQUE NOT NULL,
   encrypted_password TEXT,
   email_confirmed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
+CREATE INDEX IF NOT EXISTS idx_auth_users_email ON campus_circle_auth.users(email);
+
 CREATE SCHEMA IF NOT EXISTS campus_circle;
 
 CREATE TABLE IF NOT EXISTS campus_circle.parents (
-  id UUID PRIMARY KEY REFERENCES auth.users(id),
+  id UUID PRIMARY KEY REFERENCES campus_circle_auth.users(id) ON DELETE CASCADE,
   email TEXT UNIQUE NOT NULL,
   full_name TEXT NOT NULL,
   phone TEXT,
@@ -41,7 +43,7 @@ CREATE TABLE IF NOT EXISTS campus_circle.classes (
 );
 
 CREATE TABLE IF NOT EXISTS campus_circle.students (
-  id UUID PRIMARY KEY REFERENCES auth.users(id),
+  id UUID PRIMARY KEY REFERENCES campus_circle_auth.users(id) ON DELETE CASCADE,
   school_id UUID REFERENCES campus_circle.schools(id) ON DELETE SET NULL,
   class_id UUID REFERENCES campus_circle.classes(id) ON DELETE SET NULL,
   full_name TEXT NOT NULL,
@@ -67,6 +69,7 @@ CREATE TABLE IF NOT EXISTS campus_circle.events (
   end_time TIMESTAMPTZ,
   location TEXT,
   is_published BOOLEAN DEFAULT TRUE,
+  max_registrations INTEGER,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
