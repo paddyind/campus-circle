@@ -24,6 +24,11 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r backend/requirements.txt
 
+    - name: Run sanity tests
+      run: |
+        chmod +x scripts/sanity-test.sh
+        ./scripts/sanity-test.sh
+
     - name: Run Python tests
       run: |
         # Placeholder for running Python tests

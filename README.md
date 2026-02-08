@@ -19,6 +19,8 @@ A modern, production-ready platform connecting schools, parents, and students th
 
 ## 🛠️ Quick Start
 
+> **📖 For detailed deployment instructions, including database migrations and production setup, see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**
+
 ### 1. Clone the Repository
 
 ```bash
@@ -26,7 +28,17 @@ git clone <repository-url>
 cd campus-circle
 ```
 
-### 2. Environment Setup
+### 2. Pre-Deployment Sanity Check
+
+Run the sanity test script to verify your environment:
+
+```bash
+./scripts/sanity-test.sh
+```
+
+This validates your configuration, Docker setup, migrations, and code structure.
+
+### 3. Environment Setup
 
 Create a `.env` file in the project root:
 
@@ -53,7 +65,7 @@ ENABLE_EMAIL_CONFIRMATION=false
 
 **Get Supabase credentials from**: Supabase Dashboard → Settings → API
 
-### 3. Deploy and Start Services
+### 4. Deploy and Start Services
 
 #### Build Docker Images
 
@@ -110,6 +122,7 @@ This creates:
 - `campus_circle` schema with all application tables
 - `campus_circle_auth` schema for isolated authentication
 - Seed data (schools, events, user roles)
+- **Migration 009**: Updates students table for children under 14 support
 
 #### Disable Email Confirmation (Development)
 
@@ -139,7 +152,7 @@ This starts the React frontend with hot reload (port 3000).
 
 This starts Nginx serving the built frontend (port 80).
 
-### 4. Access the Application
+### 5. Access the Application
 
 - **Frontend**: http://localhost:3000 (dev) or http://localhost (prod)
 - **Backend API**: http://localhost:8000
