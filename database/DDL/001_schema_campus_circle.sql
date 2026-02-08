@@ -187,6 +187,26 @@ CREATE TABLE IF NOT EXISTS campus_circle.documents (
 );
 
 -- ============================================
+-- CONTACT SUBMISSIONS
+-- ============================================
+
+-- Contact submissions from users
+CREATE TABLE IF NOT EXISTS campus_circle.contact_submissions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES campus_circle_auth.users(id) ON DELETE SET NULL,
+  submission_type TEXT NOT NULL, -- feedback, complaint, suggestion, general
+  subject TEXT NOT NULL,
+  message TEXT NOT NULL,
+  related_event_id UUID REFERENCES campus_circle.events(id) ON DELETE SET NULL,
+  related_organizer_id UUID REFERENCES campus_circle.users(id) ON DELETE SET NULL,
+  status TEXT DEFAULT 'new', -- new, in_progress, resolved, closed
+  admin_notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  resolved_at TIMESTAMPTZ
+);
+
+-- ============================================
 -- AUDIT LOGGING
 -- ============================================
 
@@ -237,6 +257,10 @@ CREATE INDEX IF NOT EXISTS idx_event_questions_parent ON campus_circle.event_que
 -- Document indexes
 CREATE INDEX IF NOT EXISTS idx_documents_student ON campus_circle.documents(student_id);
 CREATE INDEX IF NOT EXISTS idx_documents_type ON campus_circle.documents(doc_type);
+
+-- Contact submission indexes
+CREATE INDEX IF NOT EXISTS idx_contact_submissions_user ON campus_circle.contact_submissions(user_id);
+CREATE INDEX IF NOT EXISTS idx_contact_submissions_status ON campus_circle.contact_submissions(status);
 
 -- Audit log indexes
 CREATE INDEX IF NOT EXISTS idx_audit_logs_parent ON campus_circle.audit_logs(actor_parent_id);

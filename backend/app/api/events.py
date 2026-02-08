@@ -82,3 +82,57 @@ async def get_event(event_id: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching event: {str(e)[:100]}")
+
+@router.get("/{event_id}/registrations")
+async def get_event_registrations(
+    event_id: str,
+    limit: int = 50,
+    offset: int = 0,
+    current_user: dict = Depends(RoleChecker(["admin", "event_organizer", "event_owner"]))
+):
+    """Get list of registered students for an event (admin/organizer only)"""
+    try:
+        # Verify event exists
+        event = execute_query_one("SELECT id FROM campus_circle.events WHERE id = %s", (event_id,))
+        if not event:
+            raise HTTPException(status_code=404, detail="Event not found")
+
+        # Get registrations with student and parent details
+        # Using STRING_AGG to handle multiple parents for a single student
+        query = """
+            SELECT
+                er.registered_at,
+                s.full_name as student_name,
+                s.status as student_status,
+                c.name as class_name,
+                sch.name as school_name,
+                STRING_AGG(p.full_name, ', ') as parent_name,
+                STRING_AGG(p.email, ', ') as parent_email,
+                STRING_AGG(p.phone, ', ') as parent_phone
+            FROM campus_circle.event_registrations er
+            JOIN campus_circle.students s ON er.student_id = s.id
+            LEFT JOIN campus_circle.classes c ON s.class_id = c.id
+            LEFT JOIN campus_circle.schools sch ON s.school_id = sch.id
+            LEFT JOIN campus_circle.parent_students ps ON s.id = ps.student_id
+            LEFT JOIN campus_circle.parents p ON ps.parent_id = p.id
+            WHERE er.event_id = %s
+            GROUP BY er.registered_at, s.id, s.full_name, s.status, c.name, sch.name
+            ORDER BY er.registered_at DESC
+            LIMIT %s OFFSET %s
+        """
+        registrations = execute_query(query, (event_id, limit, offset))
+
+        # Get total count for pagination
+        count_query = "SELECT COUNT(*) as total FROM campus_circle.event_registrations WHERE event_id = %s"
+        total_count = execute_query_one(count_query, (event_id,))
+
+        return {
+            "registrations": [dict(reg) for reg in registrations] if registrations else [],
+            "total": total_count['total'] if total_count else 0,
+            "limit": limit,
+            "offset": offset
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching registrations: {str(e)[:100]}")

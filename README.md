@@ -7,6 +7,7 @@ A modern, production-ready platform connecting schools, parents, and students th
 - **Event Management**: Create, view, and register for campus events
 - **Parent-Student Communication**: Seamless communication between parents and students
 - **User Dashboards**: Separate dashboards for parents and students
+- **Admin Features**: Manage events, users, and contact submissions
 - **Authentication**: Secure JWT-based authentication via Supabase
 - **Responsive Design**: Modern UI built with React and Tailwind CSS
 

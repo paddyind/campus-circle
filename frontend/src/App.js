@@ -19,6 +19,7 @@ import ContactPage from './features/contact/components/ContactPage';
 import AboutPage from './components/AboutPage';
 import ManageUsers from './features/admin/components/ManageUsers';
 import ManageEvents from './features/admin/components/ManageEvents';
+import ContactSubmissions from './features/admin/components/ContactSubmissions';
 import { fetchEvents } from './features/events/eventsSlice';
 import { setCredentials } from './features/auth/authSlice';
 import { fetchProfile } from './features/dashboard/dashboardSlice';
@@ -305,6 +306,14 @@ function App() {
                 <ManageEvents />
               </ProtectedRoute>
             } 
+          />
+          <Route
+            path="/admin/contact-submissions"
+            element={
+              <ProtectedRoute>
+                <ContactSubmissions />
+              </ProtectedRoute>
+            }
           />
           <Route path="/privacy" element={<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full"><h1 className="text-3xl font-bold mb-4">Privacy Policy</h1><p className="text-gray-600">Our privacy policy and data protection practices.</p></div>} />
           <Route path="/security" element={<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full"><h1 className="text-3xl font-bold mb-4">Security</h1><p className="text-gray-600">Information about our security measures.</p></div>} />
