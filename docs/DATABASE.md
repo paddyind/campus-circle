@@ -58,6 +58,10 @@ For production, use Supabase's managed PostgreSQL database. Configure the connec
 - **`campus_circle.event_faqs`** - Event FAQs
 - **`campus_circle.event_questions`** - Parent questions about events
 
+#### Contact & Support
+
+- **`campus_circle.contact_submissions`** - User contact submissions (feedback, complaints, suggestions)
+
 #### Other Tables
 
 - **`campus_circle.documents`** - Student documents

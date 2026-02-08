@@ -956,3 +956,40 @@ async def get_my_parent(current_user: dict = Depends(get_current_user)):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching parent: {str(e)[:100]}")
+
+
+@router.post("/contact", status_code=201)
+async def submit_contact_form(
+    submission: ContactSubmission,
+    current_user: dict = Depends(get_current_user)
+):
+    """Submit a contact form (feedback, complaint, suggestion, etc.)"""
+    user_id = current_user.get("sub") or current_user.get("id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="User ID not found in token")
+
+    try:
+        # Insert submission
+        result = execute_query_one(
+            """
+            INSERT INTO campus_circle.contact_submissions
+            (user_id, submission_type, subject, message, related_event_id, related_organizer_id)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (
+                user_id,
+                submission.submission_type,
+                submission.subject,
+                submission.message,
+                submission.related_event_id,
+                submission.related_organizer_id
+            )
+        )
+
+        if not result:
+            raise HTTPException(status_code=500, detail="Failed to submit contact form")
+
+        return {"message": "Submission received successfully", "id": str(result['id'])}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error submitting form: {str(e)[:100]}")

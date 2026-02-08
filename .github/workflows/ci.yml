@@ -37,7 +37,7 @@ jobs:
     - name: Install Node.js dependencies
       run: |
         cd frontend
-        npm install
+        npm install --legacy-peer-deps
 
     - name: Run Node.js tests
       run: |
@@ -47,4 +47,4 @@ jobs:
 
     - name: Build production images
       run: |
-        docker-compose build
+        docker compose -f infra/docker-compose.yml build

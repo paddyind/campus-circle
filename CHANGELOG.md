@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Admin: Contact Submissions management with status tracking
+- Admin: View registered members for events with pagination
+- API: Endpoint for paginated event registrations (`GET /api/events/{id}/registrations`)
+- API: Endpoint for contact form submissions (`POST /api/users/contact`)
+- Database: `contact_submissions` table for handling user feedback
 - Isolated authentication schema (`campus_circle_auth`) for complete portability
 - Database backup and restore scripts (`backup-db.sh`, `restore-db.sh`)
 - Comprehensive database schema with `campus_circle` namespace
@@ -30,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentation: `CHILDREN_UNDER_14_DESIGN.md` for architectural decisions
 
 ### Changed
+- Renamed seed events to have "Demo_" prefix for clarity
 - Consolidated documentation into README, ARCHITECTURE, and DATABASE
 - Optimized Docker setup for development and production
 - Improved database schema isolation for portability

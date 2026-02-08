@@ -116,12 +116,14 @@ async def delete_user(
         logger.error(f"Error deleting user: {e}")
         raise HTTPException(status_code=500, detail=f"Error deleting user: {str(e)[:100]}")
 
-@router.get("/contact-submissions", response_model=list[dict])
+@router.get("/contact-submissions", response_model=dict)
 async def list_contact_submissions(
+    limit: int = 50,
+    offset: int = 0,
     current_user: dict = Depends(get_current_user),
     _: None = Depends(RoleChecker(["admin", "event_organizer"]))
 ):
-    """List all contact submissions (admin/organizer only)"""
+    """List contact submissions with pagination (admin/organizer only)"""
     try:
         submissions = execute_query("""
             SELECT 
@@ -140,9 +142,19 @@ async def list_contact_submissions(
             LEFT JOIN campus_circle_auth.users au ON cs.user_id = au.id
             LEFT JOIN campus_circle.events e ON cs.related_event_id = e.id
             ORDER BY cs.created_at DESC
-        """)
+            LIMIT %s OFFSET %s
+        """, (limit, offset))
+
+        # Get total count
+        count_result = execute_query_one("SELECT COUNT(*) as total FROM campus_circle.contact_submissions")
+        total = count_result['total'] if count_result else 0
         
-        return [dict(sub) for sub in submissions] if submissions else []
+        return {
+            "submissions": [dict(sub) for sub in submissions] if submissions else [],
+            "total": total,
+            "limit": limit,
+            "offset": offset
+        }
     except Exception as e:
         logger.error(f"Error listing contact submissions: {e}")
         raise HTTPException(status_code=500, detail=f"Error listing submissions: {str(e)[:100]}")
@@ -178,6 +190,44 @@ async def update_submission_status(
             tuple(update_values)
         )
         
+        return {"message": f"Submission status updated to {status}", "submission_id": submission_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating submission status: {e}")
+        raise HTTPException(status_code=500, detail=f"Error updating status: {str(e)[:100]}")
+
+@router.put("/contact-submissions/{submission_id}/status")
+async def update_submission_status(
+    submission_id: str,
+    status: str,
+    admin_notes: str = None,
+    current_user: dict = Depends(get_current_user),
+    _: None = Depends(RoleChecker(["admin", "event_organizer"]))
+):
+    """Update contact submission status (admin/organizer only)"""
+    try:
+        valid_statuses = ['new', 'in_progress', 'resolved', 'closed']
+        if status not in valid_statuses:
+            raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}")
+
+        update_fields = ["status = %s", "updated_at = NOW()"]
+        update_values = [status]
+
+        if admin_notes:
+            update_fields.append("admin_notes = %s")
+            update_values.append(admin_notes)
+
+        if status == 'resolved':
+            update_fields.append("resolved_at = NOW()")
+
+        update_values.append(submission_id)
+
+        execute_query(
+            f"UPDATE campus_circle.contact_submissions SET {', '.join(update_fields)} WHERE id = %s",
+            tuple(update_values)
+        )
+
         return {"message": f"Submission status updated to {status}", "submission_id": submission_id}
     except HTTPException:
         raise
