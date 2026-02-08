@@ -89,10 +89,44 @@ export const registerForEvent = createAsyncThunk(
   }
 );
 
+export const fetchEventRegistrations = createAsyncThunk(
+  'events/fetchEventRegistrations',
+  async ({ eventId, limit = 50, offset = 0 }, { getState, rejectWithValue }) => {
+    try {
+      const { token } = getState().auth;
+      if (!token) {
+        return rejectWithValue('Authentication required');
+      }
+
+      const response = await fetch(getApiUrl(`/events/${eventId}/registrations?limit=${limit}&offset=${offset}`), {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Failed to fetch registrations' }));
+        throw new Error(errorData.detail || `Failed to fetch registrations: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      return rejectWithValue(error.message || 'Failed to load registrations');
+    }
+  }
+);
+
 const initialState = {
   events: [],
   currentEvent: null,
   registeredEvents: [],
+  currentEventRegistrations: {
+    data: [],
+    total: 0,
+    loading: false,
+    error: null,
+  },
   loading: false,
   error: null,
 };
@@ -146,6 +180,19 @@ const eventsSlice = createSlice({
       .addCase(registerForEvent.rejected, (state, action) => {
         // Set error message for failed registration
         state.error = action.payload;
+      })
+      .addCase(fetchEventRegistrations.pending, (state) => {
+        state.currentEventRegistrations.loading = true;
+        state.currentEventRegistrations.error = null;
+      })
+      .addCase(fetchEventRegistrations.fulfilled, (state, action) => {
+        state.currentEventRegistrations.loading = false;
+        state.currentEventRegistrations.data = action.payload.registrations || [];
+        state.currentEventRegistrations.total = action.payload.total || 0;
+      })
+      .addCase(fetchEventRegistrations.rejected, (state, action) => {
+        state.currentEventRegistrations.loading = false;
+        state.currentEventRegistrations.error = action.payload;
       });
   },
 });

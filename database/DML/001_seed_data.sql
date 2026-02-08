@@ -37,32 +37,22 @@ ON CONFLICT DO NOTHING;
 -- ============================================
 -- SEED TEST EVENTS
 -- ============================================
-INSERT INTO campus_circle.events (id, school_id, title, description, start_time, end_time, location, is_published) VALUES
-('660e8400-e29b-41d4-a716-446655440000', '550e8400-e29b-41d4-a716-446655440000', 'Demo_Annual Science Fair', 'A showcase of the brilliant scientific minds of our students. Projects from all grades will be displayed.', '2024-09-15 10:00:00+00', '2024-09-15 14:00:00+00', 'Main Auditorium', TRUE),
-('660e8400-e29b-41d4-a716-446655440001', '550e8400-e29b-41d4-a716-446655440000', 'Demo_Parent-Teacher Conference', 'Discuss your child''s progress with their teachers. Multiple time slots available.', '2024-10-01 08:00:00+00', '2024-10-01 17:00:00+00', 'School Campus', TRUE),
-('660e8400-e29b-41d4-a716-446655440002', '550e8400-e29b-41d4-a716-446655440000', 'Demo_Sports Day', 'Annual inter-house sports competition featuring track and field events.', '2024-10-20 09:00:00+00', '2024-10-20 16:00:00+00', 'Sports Ground', TRUE),
-('660e8400-e29b-41d4-a716-446655440003', '550e8400-e29b-41d4-a716-446655440000', 'Demo_Cultural Festival', 'Celebration of arts, music, and cultural diversity.', '2024-11-10 10:00:00+00', '2024-11-10 18:00:00+00', 'Cultural Center', TRUE)
-ON CONFLICT DO NOTHING;
-
--- ============================================
--- NOTE: Test users should be created via Supabase Auth
--- The following are example UUIDs for reference only
--- Actual users must be created through the registration API
--- ============================================
-
--- Example structure for test users (DO NOT RUN - for reference only):
--- 
--- 1. Create user in Supabase Auth (via API or Supabase Dashboard)
---    - Email: parent@campuscircle.com
---    - Password: [set via Supabase]
---    - This creates an entry in campus_circle_auth.users (or Supabase's auth.users if using Supabase)
---
--- 2. Then insert into campus_circle tables:
---    INSERT INTO campus_circle.users (id, role) 
---    VALUES ('[auth_user_id_from_step_1]', 'parent');
---
---    INSERT INTO campus_circle.parents (id, email, full_name, phone)
---    VALUES ('[auth_user_id_from_step_1]', 'parent@campuscircle.com', 'John Doe', '555-1000');
+-- Ensure all events have 'Demo_' prefix
+-- Removed duplicates if any existed with same title/date
+INSERT INTO campus_circle.events (id, school_id, title, description, start_time, end_time, location, is_published, max_registrations) VALUES
+('660e8400-e29b-41d4-a716-446655440000', '550e8400-e29b-41d4-a716-446655440000', 'Demo_Annual Science Fair', 'A showcase of the brilliant scientific minds of our students. Projects from all grades will be displayed.', '2024-09-15 10:00:00+00', '2024-09-15 14:00:00+00', 'Main Auditorium', TRUE, 100),
+('660e8400-e29b-41d4-a716-446655440001', '550e8400-e29b-41d4-a716-446655440000', 'Demo_Parent-Teacher Conference', 'Discuss your child''s progress with their teachers. Multiple time slots available.', '2024-10-01 08:00:00+00', '2024-10-01 17:00:00+00', 'School Campus', TRUE, 50),
+('660e8400-e29b-41d4-a716-446655440002', '550e8400-e29b-41d4-a716-446655440000', 'Demo_Sports Day', 'Annual inter-house sports competition featuring track and field events.', '2024-10-20 09:00:00+00', '2024-10-20 16:00:00+00', 'Sports Ground', TRUE, 200),
+('660e8400-e29b-41d4-a716-446655440003', '550e8400-e29b-41d4-a716-446655440000', 'Demo_Cultural Festival', 'Celebration of arts, music, and cultural diversity.', '2024-11-10 10:00:00+00', '2024-11-10 18:00:00+00', 'Cultural Center', TRUE, 150),
+('660e8400-e29b-41d4-a716-446655440004', '550e8400-e29b-41d4-a716-446655440000', 'Demo_Math Olympiad', 'Annual mathematics competition for all grades. Test your problem-solving skills!', '2024-11-20 09:00:00+00', '2024-11-20 12:00:00+00', 'Examination Hall', TRUE, 50)
+ON CONFLICT (id) DO UPDATE
+SET title = EXCLUDED.title,
+    description = EXCLUDED.description,
+    start_time = EXCLUDED.start_time,
+    end_time = EXCLUDED.end_time,
+    location = EXCLUDED.location,
+    is_published = EXCLUDED.is_published,
+    max_registrations = EXCLUDED.max_registrations;
 
 -- ============================================
 -- SEED EVENT FAQs (Example)
