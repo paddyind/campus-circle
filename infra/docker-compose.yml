@@ -18,7 +18,8 @@ services:
   frontend:
     build:
       context: ..
-      dockerfile: infra/Dockerfile.frontend.dev
+      dockerfile: infra/Dockerfile.frontend
+      target: dev
     ports:
       - "3000:3000"
     environment:
@@ -46,18 +47,11 @@ services:
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-      - SUPABASE_DB_HOST=${SUPABASE_DB_HOST}
-      - SUPABASE_DB_PORT=${SUPABASE_DB_PORT}
-      - SUPABASE_DB_NAME=${SUPABASE_DB_NAME}
-      - SUPABASE_DB_USER=${SUPABASE_DB_USER}
-      - SUPABASE_DB_PASSWORD=${SUPABASE_DB_PASSWORD}
     volumes:
       - ../backend:/app
 
   migrations:
-    build:
-      context: ..
-      dockerfile: infra/Dockerfile.migrations
+    image: postgres:15-alpine
     environment:
       - SUPABASE_DB_HOST=${SUPABASE_DB_HOST}
       - SUPABASE_DB_PORT=${SUPABASE_DB_PORT}
@@ -74,7 +68,7 @@ services:
         for f in /migrations/*.sql; do PGPASSWORD=$$SUPABASE_DB_PASSWORD psql -v ON_ERROR_STOP=1 --host $$SUPABASE_DB_HOST --port $$SUPABASE_DB_PORT --username $$SUPABASE_DB_USER --dbname $$SUPABASE_DB_NAME -f $$f; done
       "
     volumes:
-      - ../migrations:/migrations
+      - ../database:/migrations
     depends_on:
       db:
         condition: service_healthy

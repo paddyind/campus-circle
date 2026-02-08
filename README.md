@@ -19,8 +19,6 @@ A modern, production-ready platform connecting schools, parents, and students th
 
 ## 🛠️ Quick Start
 
-> **📖 For detailed deployment instructions, including database migrations and production setup, see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**
-
 ### 1. Clone the Repository
 
 ```bash
@@ -33,7 +31,7 @@ cd campus-circle
 Run the sanity test script to verify your environment:
 
 ```bash
-./scripts/sanity-test.sh
+./infra/scripts/sanity-test.sh
 ```
 
 This validates your configuration, Docker setup, migrations, and code structure.
@@ -70,66 +68,51 @@ ENABLE_EMAIL_CONFIRMATION=false
 #### Build Docker Images
 
 ```bash
-./scripts/docker-manage.sh build
+./infra/scripts/docker-manage.sh build
 ```
 
 #### Start Core Services (Database + Backend)
 
 ```bash
-./scripts/docker-manage.sh start
+./infra/scripts/docker-manage.sh start
 ```
 
 This starts:
 - PostgreSQL database (port 5432)
 - FastAPI backend (port 8000)
 
-#### Create Admin User (One-time Setup)
+#### Create admin, parent, and student (after migrations)
 
-Create the admin user for Campus Circle:
-
-```bash
-./scripts/setup-admin.sh
-```
-
-**Admin credentials:**
-- **Email**: `admin@campuscircle.com`
-- **Password**: `password123`
-- **Role**: `admin`
-
-#### Create Test Users
-
-After running migrations, create test users with confirmed emails:
+From project root run:
 
 ```bash
-./scripts/setup-test-users.sh
+./infra/scripts/setup-test-users.sh
 ```
 
-This creates test users via Supabase Admin API with confirmed emails and links them to `campus_circle` schema.
+The script uses **backend/requirements.txt** (creates `.venv` and installs from it if needed), then creates the three users in Supabase Auth and `campus_circle_auth.users`. Ensure `.env` has your Supabase DB host (e.g. `SUPABASE_DB_HOST=db.xxxx.supabase.co`).
 
-**Test user credentials:**
-- **Parent**: `parent@campuscircle.com` / `password123`
-- **Student**: `student@campuscircle.com` / `password123`
-
-**Note**: For detailed information about all scripts, see [scripts/README.md](scripts/README.md).
+**Credentials (also on Help page):** demo_admin@campuscircle.com | demo_parent@campuscircle.com | demo_student@campuscircle.com (password: password123)
 
 #### Run Database Migrations
 
+**Supabase or any Postgres** (using `.env`; no SQL editor needed):
 ```bash
-./scripts/docker-manage.sh migrate
+python infra/scripts/db.py migrate
 ```
 
-This creates:
-- `campus_circle` schema with all application tables
-- `campus_circle_auth` schema for isolated authentication
-- Seed data (schools, events, user roles)
-- **Migration 009**: Updates students table for children under 14 support
+**Local Docker:**
+```bash
+./infra/scripts/docker-manage.sh migrate
+```
+
+This applies SQL files from `database/` when present (001_schema.sql, 002_seed.sql — schema including children-under-14 design, and sample data).
 
 #### Disable Email Confirmation (Development)
 
 For development, disable email confirmation to avoid bounce issues and simplify testing:
 
 ```bash
-./scripts/setup-admin.sh --disable-email-confirmation
+./infra/scripts/setup-test-users.sh --disable-email-confirmation
 ```
 
 This will guide you through disabling email confirmation in Supabase Dashboard.
@@ -139,7 +122,7 @@ This will guide you through disabling email confirmation in Supabase Dashboard.
 #### Start Frontend (Development Mode)
 
 ```bash
-./scripts/docker-manage.sh dev
+./infra/scripts/docker-manage.sh dev
 ```
 
 This starts the React frontend with hot reload (port 3000).
@@ -147,7 +130,7 @@ This starts the React frontend with hot reload (port 3000).
 #### Start Frontend (Production Mode)
 
 ```bash
-./scripts/docker-manage.sh prod
+./infra/scripts/docker-manage.sh prod
 ```
 
 This starts Nginx serving the built frontend (port 80).
@@ -190,38 +173,38 @@ curl http://localhost:8000/api/events
 ### Check Service Status
 
 ```bash
-./scripts/docker-manage.sh status
+./infra/scripts/docker-manage.sh status
 ```
 
 ## 🐳 Docker Commands
 
 ```bash
 # Start services
-./scripts/docker-manage.sh start [service]
+./infra/scripts/docker-manage.sh start [service]
 
 # Stop services
-./scripts/docker-manage.sh stop [service]
+./infra/scripts/docker-manage.sh stop [service]
 
 # Restart services
-./scripts/docker-manage.sh restart [service]
+./infra/scripts/docker-manage.sh restart [service]
 
 # Build images
-./scripts/docker-manage.sh build [service]
+./infra/scripts/docker-manage.sh build [service]
 
 # View logs
-./scripts/docker-manage.sh logs [service]
+./infra/scripts/docker-manage.sh logs [service]
 
 # Check status
-./scripts/docker-manage.sh status
+./infra/scripts/docker-manage.sh status
 
 # Run migrations
-./scripts/docker-manage.sh migrate
+./infra/scripts/docker-manage.sh migrate
 
 # Development mode (frontend with hot reload)
-./scripts/docker-manage.sh dev
+./infra/scripts/docker-manage.sh dev
 
 # Production mode (nginx serving built frontend)
-./scripts/docker-manage.sh prod
+./infra/scripts/docker-manage.sh prod
 ```
 
 ## 💾 Database Backup and Restore
@@ -229,10 +212,10 @@ curl http://localhost:8000/api/events
 ### Create Backup
 
 ```bash
-./scripts/backup-db.sh [backup-name]
+python infra/scripts/db.py backup
 ```
 
-Backups are stored in `backups/` directory and include:
+Backups are stored in `database/backup/` and include:
 - `campus_circle` schema (all tables, indexes, constraints)
 - `campus_circle_auth` schema (authentication tables)
 - All data from both schemas
@@ -240,7 +223,7 @@ Backups are stored in `backups/` directory and include:
 ### Restore from Backup
 
 ```bash
-./scripts/restore-db.sh <backup-name>
+python infra/scripts/db.py restore <path-to-backup.sql>
 ```
 
 **Warning**: This will drop and recreate the schemas. Make sure you have a backup before restoring.
@@ -251,26 +234,16 @@ Backups are stored in `backups/` directory and include:
 campus-circle/
 ├── backend/           # FastAPI backend application
 ├── frontend/          # React frontend application
-├── infra/             # Docker and infrastructure configuration
+├── database/          # Schema/seed SQL (001, 002) and database/backup/ for backups
+├── infra/
 │   ├── docker-compose.yml
 │   ├── Dockerfile.backend
-│   ├── Dockerfile.frontend
-│   ├── Dockerfile.frontend.dev
-│   └── Dockerfile.migrations
-├── migrations/        # Database migration scripts
-├── database/          # Database schema and seed data
-│   ├── DDL/          # Data Definition Language (schema)
-│   └── DML/          # Data Manipulation Language (seed data)
-├── scripts/           # Utility scripts
-│   ├── docker-manage.sh  # Docker management
-│   ├── setup-admin.sh    # Admin user setup
-│   ├── setup-test-users.sh # Test users setup
-│   ├── backup-db.sh      # Database backup
-│   ├── restore-db.sh     # Database restore
-│   └── README.md         # Scripts documentation
-└── docs/              # Documentation
-    ├── ARCHITECTURE.md    # System architecture
-    └── DATABASE.md        # Database schema documentation
+│   ├── Dockerfile.frontend   # Multi-stage: dev + prod
+│   ├── nginx.conf
+│   └── scripts/      # db.py, docker-manage.sh, setup-test-users, sanity-test
+└── docs/
+    ├── ARCHITECTURE.md
+    └── DATABASE.md
 ```
 
 ## 🏗️ Architecture
@@ -288,7 +261,7 @@ For detailed architecture information, see [docs/ARCHITECTURE.md](docs/ARCHITECT
 
 - [Architecture Documentation](docs/ARCHITECTURE.md) - System architecture and design
 - [Database Schema](docs/DATABASE.md) - Database structure and schema details
-- [Scripts Documentation](scripts/README.md) - Comprehensive guide for all utility scripts
+- [Scripts Documentation](infra/scripts/README.md) - Scripts for DB, Docker, setup
 - [CHANGELOG.md](CHANGELOG.md) - Version history and changes
 
 ## 🔧 Development
@@ -320,12 +293,10 @@ For detailed database documentation, see [docs/DATABASE.md](docs/DATABASE.md).
 
 ## 🔐 Authentication
 
-The application uses Supabase Auth for authentication:
+The application uses Supabase Auth for authentication. Real users who register are created in Supabase's `auth.users`; the backend syncs them into `campus_circle_auth.users` and then into `campus_circle.users` and profile tables. There is no DB trigger—sync is in application code. See **[docs/AUTH_AND_REGISTRATION.md](docs/AUTH_AND_REGISTRATION.md)** for the full flow.
 
-- **Supabase Cloud**: Uses Supabase's built-in `auth.users` table
-- **Local Development**: Uses `campus_circle_auth.users` for complete isolation
-
-User accounts are created via the registration API and linked to profile tables (`campus_circle.parents` or `campus_circle.students`).
+- **Optional**: Set `ALLOWED_EMAIL_DOMAINS` in `.env` (e.g. `campuscircle.com`) to restrict registration to specific domains and keep users application- or tenant-specific.
+- User accounts are created via the registration API and linked to profile tables (`campus_circle.parents` or `campus_circle.students`).
 
 ### Parent-Child Management
 

@@ -26,8 +26,8 @@ jobs:
 
     - name: Run sanity tests
       run: |
-        chmod +x scripts/sanity-test.sh
-        ./scripts/sanity-test.sh
+        chmod +x infra/scripts/sanity-test.sh
+        ./infra/scripts/sanity-test.sh
 
     - name: Run Python tests
       run: |

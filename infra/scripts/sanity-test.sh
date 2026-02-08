@@ -12,9 +12,9 @@ BLUE='\033[0;34m'
 MAGENTA='\033[0;35m'
 NC='\033[0m' # No Color
 
-# Project root directory
+# Repo root: infra/scripts -> .. = infra, ../.. = repo root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 # Test counters
 TESTS_RUN=0
@@ -105,40 +105,38 @@ test_docker() {
 }
 
 test_migrations() {
-    log_section "3. Database Migrations"
+    log_section "3. Database Structure"
     
-    local migrations_dir="$PROJECT_ROOT/migrations"
-    if [ -d "$migrations_dir" ]; then
-        log_success "Migrations directory exists"
+    local database_dir="$PROJECT_ROOT/database"
+    if [ -d "$database_dir" ]; then
+        log_success "Database directory exists"
         
-        # Use a safer way to count files
-        local migration_count=$(find "$migrations_dir" -name "*.sql" -type f | wc -l | tr -d ' ')
-        
-        if [ "$migration_count" -gt 0 ]; then
-            log_success "Found $migration_count migration files"
-            
-            # Check for the latest migration
-            if [ -f "$migrations_dir/009_update_students_for_children_under_14.sql" ]; then
-                log_success "Latest migration (009) for children under 14 exists"
+        local sql_count=$(find "$database_dir" -maxdepth 1 -name "*.sql" -type f | wc -l | tr -d ' ')
+        if [ "$sql_count" -gt 0 ]; then
+            log_success "Found $sql_count SQL file(s) in database/"
+            if [ -f "$database_dir/001_schema.sql" ] && [ -f "$database_dir/002_seed.sql" ]; then
+                log_success "Expected schema/seed files (001, 002) present"
             else
-                log_error "Latest migration (009) is missing"
+                log_error "When using SQL files, expect 001_schema.sql and 002_seed.sql in database/"
             fi
-            
-            # Validate SQL files exist and are not empty
             while IFS= read -r -d '' file; do
-                local filename
-                filename=$(basename "$file")
                 if [ -s "$file" ]; then
-                    log_success "Migration $filename is not empty"
+                    log_success "SQL $(basename "$file") is not empty"
                 else
-                    log_error "Migration $filename is empty"
+                    log_error "SQL $(basename "$file") is empty"
                 fi
-            done < <(find "$migrations_dir" -name "*.sql" -type f -print0 | sort -z)
+            done < <(find "$database_dir" -maxdepth 1 -name "*.sql" -type f -print0 | sort -z)
         else
-            log_error "No migration files found"
+            log_success "No SQL files in database/ (structure in place; migrations optional)"
+        fi
+        if [ -d "$database_dir/backup" ]; then
+            log_success "Backup directory (database/backup) exists"
+        else
+            log_warning "database/backup not found (created on first backup)"
+            ((TESTS_RUN++))
         fi
     else
-        log_error "Migrations directory not found"
+        log_error "Database directory not found"
     fi
 }
 
@@ -276,7 +274,6 @@ test_documentation() {
         "README.md"
         "CHANGELOG.md"
         "docs/DATABASE.md"
-        "docs/CHILDREN_UNDER_14_DESIGN.md"
         "docs/ARCHITECTURE.md"
     )
     
@@ -290,14 +287,13 @@ test_documentation() {
 }
 
 test_scripts() {
-    log_section "8. Utility Scripts"
+    log_section "8. Utility Scripts (infra/scripts)"
     
     local script_files=(
-        "scripts/docker-manage.sh"
-        "scripts/setup-admin.sh"
-        "scripts/setup-test-users.sh"
-        "scripts/backup-db.sh"
-        "scripts/restore-db.sh"
+        "infra/scripts/docker-manage.sh"
+        "infra/scripts/setup-test-users.sh"
+        "infra/scripts/db.py"
+        "infra/scripts/sanity-test.sh"
     )
     
     for file in "${script_files[@]}"; do
@@ -332,7 +328,7 @@ test_api_endpoints() {
         fi
     else
         log_warning "Backend is not running (skipping API tests)"
-        log_info "Start backend with: ./scripts/docker-manage.sh start"
+        log_info "Start backend with: ./infra/scripts/docker-manage.sh start"
         ((TESTS_RUN++))
     fi
 }
@@ -370,9 +366,9 @@ main() {
         echo -e "${GREEN}╚═══════════════════════════════════════════════════════════════╝${NC}"
         echo ""
         log_info "Next steps:"
-        echo "  1. Deploy to Docker: ./scripts/docker-manage.sh dev"
-        echo "  2. Run migrations: ./scripts/docker-manage.sh migrate"
-        echo "  3. Setup test users: ./scripts/setup-test-users.sh"
+        echo "  1. Deploy to Docker: ./infra/scripts/docker-manage.sh dev"
+        echo "  2. Run migrations: python infra/scripts/db.py migrate  (or ./infra/scripts/docker-manage.sh migrate)"
+        echo "  3. Setup test users: ./infra/scripts/setup-test-users.sh"
         echo ""
         exit 0
     else

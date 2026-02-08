@@ -1,16 +1,25 @@
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from contextlib import contextmanager
-from app.core.config import SUPABASE_DB_HOST, SUPABASE_DB_PORT, SUPABASE_DB_NAME, SUPABASE_DB_USER, SUPABASE_DB_PASSWORD
+from app.core.config import (
+    SUPABASE_DB_HOST,
+    SUPABASE_DB_PORT,
+    SUPABASE_DB_NAME,
+    SUPABASE_DB_USER,
+    SUPABASE_DB_PASSWORD,
+    SUPABASE_DB_SSLMODE,
+)
 
-# Database connection parameters
+# Database connection: entirely from env. No host resolution or infra logic in app.
 DB_CONFIG = {
-    'host': SUPABASE_DB_HOST or 'db',
-    'port': SUPABASE_DB_PORT or '5432',
-    'database': SUPABASE_DB_NAME or 'postgres',
-    'user': SUPABASE_DB_USER or 'postgres',
-    'password': SUPABASE_DB_PASSWORD or 'postgres',
+    "host": (SUPABASE_DB_HOST or "db").strip(),
+    "port": int(SUPABASE_DB_PORT or 5432),
+    "database": SUPABASE_DB_NAME or "postgres",
+    "user": SUPABASE_DB_USER or "postgres",
+    "password": SUPABASE_DB_PASSWORD or "postgres",
 }
+if SUPABASE_DB_SSLMODE:
+    DB_CONFIG["sslmode"] = SUPABASE_DB_SSLMODE.strip()
 
 @contextmanager
 def get_db_connection():

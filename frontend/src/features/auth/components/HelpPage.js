@@ -21,7 +21,7 @@ const HelpPage = () => {
               <div className="border border-gray-200 rounded-lg p-6 bg-blue-50">
                 <h3 className="text-xl font-bold text-gray-800 mb-3">Parent Login</h3>
                 <div className="space-y-2 text-gray-700">
-                  <p><strong>Email:</strong> parent@campuscircle.com</p>
+                  <p><strong>Email:</strong> demo_parent@campuscircle.com</p>
                   <p><strong>Password:</strong> password123</p>
                 </div>
               </div>
@@ -30,7 +30,7 @@ const HelpPage = () => {
               <div className="border border-gray-200 rounded-lg p-6 bg-green-50">
                 <h3 className="text-xl font-bold text-gray-800 mb-3">Student Login</h3>
                 <div className="space-y-2 text-gray-700">
-                  <p><strong>Email:</strong> student@campuscircle.com</p>
+                  <p><strong>Email:</strong> demo_student@campuscircle.com</p>
                   <p><strong>Password:</strong> password123</p>
                 </div>
               </div>
@@ -39,7 +39,7 @@ const HelpPage = () => {
               <div className="border border-gray-200 rounded-lg p-6 bg-purple-50">
                 <h3 className="text-xl font-bold text-gray-800 mb-3">Admin Login</h3>
                 <div className="space-y-2 text-gray-700">
-                  <p><strong>Email:</strong> admin@campuscircle.com</p>
+                  <p><strong>Email:</strong> demo_admin@campuscircle.com</p>
                   <p><strong>Password:</strong> password123</p>
                 </div>
               </div>

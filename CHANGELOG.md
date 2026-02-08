@@ -7,10 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Database layout**: Schema/seed SQL moved from `database/migrations/` to `database/`; migrations are optional when no migration data. Backups and initial/demo data use `database/backup/`. Scripts and docs updated.
+- **Docs**: Children-under-14 design merged into `docs/DATABASE.md`; standalone `CHILDREN_UNDER_14_DESIGN.md` removed.
+- **Docker**: Single `Dockerfile.frontend` (multi-stage: dev + prod); migrations service uses `postgres:15-alpine` image. Removed `Dockerfile.frontend.dev` and `Dockerfile.migrations`.
+
 ### Added
 - Admin: Contact Submissions management with status tracking
-- Admin: View registered members for events with pagination
+- Admin: View registered members for events with pagination (RegistrationsModal on event detail and Manage Events)
 - API: Endpoint for paginated event registrations (`GET /api/events/{id}/registrations`)
+- Pre-deployment sanity test script (`scripts/sanity-test.sh`); runs in CI before build
+- Script to fix duplicate/seed data (`scripts/fix_db_data.py`) for one-off DB cleanup
 - API: Endpoint for contact form submissions (`POST /api/users/contact`)
 - Database: `contact_submissions` table for handling user feedback
 - Isolated authentication schema (`campus_circle_auth`) for complete portability
@@ -33,10 +40,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Long-term solution for children under 14: No auth accounts required, email defaults to parent's email
 - Migration `009_update_students_for_children_under_14.sql` for new child data model
 - Documentation: `CHILDREN_UNDER_14_DESIGN.md` for architectural decisions
+- Consolidated migrations: `database/migrations/` with 001_schema, 002_seed, 003_children_under_14
+- Single database script `infra/scripts/db.py`: migrate, reset, backup, restore (uses .env; run Supabase updates without SQL editor)
+- Project layout: frontend, backend, database, docs, infra (Docker + scripts); helm and multi-DB support can extend infra
 
 ### Changed
 - Renamed seed events to have "Demo_" prefix for clarity
 - Consolidated documentation into README, ARCHITECTURE, and DATABASE
+- Database: all schema and seed in `database/migrations/` (001, 002, 003)
+- Scripts: under `infra/scripts/` (db.py, docker-manage, setup-test-users, sanity-test)
 - Optimized Docker setup for development and production
 - Improved database schema isolation for portability
 - Enhanced error handling in migrations
@@ -47,6 +59,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Navigation: Role-based navigation menus (admin, parent, student)
 
 ### Fixed
+- Event registration visibility: admins and event owners can view paginated registrations per event
+- Duplicate event/seed data cleanup via fix_db_data.py
 - Migration constraint conflicts (idempotent migrations)
 - Database schema references to use isolated auth schema
 - Docker Compose service dependencies

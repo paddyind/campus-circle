@@ -202,7 +202,7 @@ The application uses isolated schemas for portability:
 
 ## Backup and Recovery
 
-- **Database Backups**: Automated via `backup-db.sh` script
+- **Database Backups**: Via `python infra/scripts/db.py backup` (writes to `database/backup/`)
 - **Schema Isolation**: Allows independent backup/restore
 - **Point-in-Time Recovery**: Available via Supabase (production)
 

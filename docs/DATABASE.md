@@ -6,6 +6,8 @@ CampusCircle uses PostgreSQL as its primary database. The database can be hosted
 
 ## Schema Structure
 
+**Only two schemas are used:** `campus_circle` and `campus_circle_auth`. Any legacy schema named `campus-circle` (with hyphen) is dropped when you run migrations or reset.
+
 ### `campus_circle` Schema
 
 All application tables are organized under the `campus_circle` schema to keep them separate from other projects and Supabase's default schemas.
@@ -16,7 +18,7 @@ All application tables are organized under the `campus_circle` schema to keep th
 
 Isolated authentication schema for Campus Circle. This allows the application to be completely portable and recreatable independently.
 
-**Note**: When using Supabase, the application uses Supabase's built-in `auth.users` table. The `campus_circle_auth` schema is used for local development or when you need complete isolation and portability.
+**Note**: When using Supabase, sign-in uses Supabase's `auth.users` table. The app keeps a mirror in `campus_circle_auth.users` (synced in application code on registration and by `setup-test-users.sh` for demo users). There is no DB trigger; see [Auth and Registration](AUTH_AND_REGISTRATION.md).
 
 ## Database Setup
 
@@ -71,107 +73,78 @@ For production, use Supabase's managed PostgreSQL database. Configure the connec
 
 #### `campus_circle_auth.users`
 
-Isolated authentication table for Campus Circle.
+Mirror of auth users for portability. When using **Supabase**, users are created in `auth.users`; the **backend** syncs them into `campus_circle_auth.users` on registration (parent/student), and `./infra/scripts/setup-test-users.sh` syncs demo users. There is no database trigger—sync is application-driven. See [AUTH_AND_REGISTRATION.md](AUTH_AND_REGISTRATION.md). If `campus_circle_auth.users` is empty, run migrations, then `./infra/scripts/setup-test-users.sh` (with `.env` pointing at your Supabase DB).
 
 | Column | Type | Description |
 |--------|------|-------------|
-| id | UUID | Primary key (references auth.users when using Supabase) |
+| id | UUID | Primary key (matches auth.users id when using Supabase) |
 | email | TEXT | User email (unique) |
 | encrypted_password | TEXT | Hashed password |
 | email_confirmed_at | TIMESTAMPTZ | Email confirmation timestamp |
 | created_at | TIMESTAMPTZ | Account creation timestamp |
 | updated_at | TIMESTAMPTZ | Last update timestamp |
 
-## Database Setup
+## Database Setup and Migrations
 
-### 1. Run DDL Scripts (Schema Creation)
+Schema and seed data live in the **`database/`** directory. The structure is in place even when there is no migration data; when present, SQL files are applied in order. Use the same credentials as the app (`.env`) so you can update Supabase or local Postgres without opening the SQL editor.
 
-Execute the DDL scripts to create the schema and tables:
+### SQL files (when present)
 
-```bash
-# Using Docker migrations (recommended)
-./scripts/docker-manage.sh migrate
+1. **`001_schema.sql`** – Full schema (auth, users, schools, events, contact_submissions, etc.). The `students` table includes children-under-14 design: independent `id`, optional `email`, nullable `auth_user_id`.
+2. **`002_seed.sql`** – Sample data (user_roles, schools, classes, Demo_ events). Users are created via `setup-test-users.sh`.
 
-# Or manually using psql
-psql -h localhost -U postgres -d postgres -f database/DDL/001_schema_campus_circle.sql
+### Running Migrations (using .env)
 
-# Or via Supabase SQL Editor
-# Copy and paste the contents of database/DDL/001_schema_circle.sql
-```
-
-### 2. Run DML Scripts (Seed Data)
-
-Execute the DML scripts to populate initial data:
+**Supabase or any Postgres** (recommended – no SQL editor needed):
 
 ```bash
-# Using Docker migrations
-./scripts/docker-manage.sh migrate
-
-# Or manually using psql
-psql -h localhost -U postgres -d postgres -f database/DML/001_seed_data.sql
-
-# Or via Supabase SQL Editor
-# Copy and paste the contents of database/DML/001_seed_data.sql
+# Apply or update schema and seed (idempotent)
+python infra/scripts/db.py migrate
 ```
 
-### 3. Using Docker Migrations
-
-The migrations in the `migrations/` directory are automatically run when using Docker. These migrations are based on the DDL files in `database/DDL/`.
-
-## Migrations
-
-Database migrations are located in the `migrations/` directory and are executed in order:
-
-1. `001_init_schema.sql` - Creates core schemas and tables
-2. `002_seed_minimal.sql` - Seeds initial data (schools, events)
-3. `003_add_users_table.sql` - Adds users table and roles
-4. `004_add_jwt_claim_function.sql` - Adds JWT claim function
-5. `006_add_contact_feedback.sql` - Adds contact submissions table
-6. `007_add_admin_setup.sql` - Adds admin setup functionality
-7. `008_fix_event_registrations_constraint.sql` - Adds unique constraint to event registrations
-8. `009_update_students_for_children_under_14.sql` - **Long-term solution**: Makes students.id independent, adds email and auth_user_id fields
-
-### Running Migrations
+**Fresh database** (drop and recreate schemas, then apply 001 and 002):
 
 ```bash
-# Using Docker (recommended)
-./scripts/docker-manage.sh migrate
-
-# Manual execution
-psql -h <host> -U <user> -d <database> -f migrations/001_init_schema.sql
-psql -h <host> -U <user> -d <database> -f migrations/002_seed_minimal.sql
-psql -h <host> -U <user> -d <database> -f migrations/003_add_users_table.sql
-psql -h <host> -U <user> -d <database> -f migrations/004_add_jwt_claim_function.sql
+python infra/scripts/db.py reset
 ```
+
+**Docker** (local DB only):
+
+```bash
+./infra/scripts/docker-manage.sh migrate
+```
+
+Requires: `psycopg2-binary` and a `.env` with `SUPABASE_DB_HOST`, `SUPABASE_DB_PORT`, `SUPABASE_DB_NAME`, `SUPABASE_DB_USER`, `SUPABASE_DB_PASSWORD`. Optional: `SUPABASE_DB_SSLMODE=require` for Supabase.
+
+**Supabase when deployed:** The app uses only these env vars (no infra logic in code). If you see "Network is unreachable" to the DB, use Supabase's connection pooler: in Dashboard → Database → **Connect** → Connection pooling, choose **Transaction** (port 6543, same host) or **Session** (pooler host + port 5432, user `postgres.<project-ref>`). Set `SUPABASE_DB_SSLMODE=require`. See `.env.example` for details.
 
 ## Authentication
 
-The application uses Supabase Auth for authentication.
-
-**When using Supabase Cloud**:
-- User accounts are created in Supabase's `auth.users` table
-- These are then linked to `campus_circle.users` and the appropriate profile table (`campus_circle.parents` or `campus_circle.students`)
-
-**When using local PostgreSQL or for portability**:
-- User accounts are created in `campus_circle_auth.users` table
-- This provides complete isolation and allows the application to be recreated independently
+The application uses Supabase Auth for authentication. **Real users** who register go into Supabase's `auth.users`; the backend syncs them into `campus_circle_auth.users` and then into `campus_circle.users` and the appropriate profile table. There is no migrate-step sync; see **[AUTH_AND_REGISTRATION.md](AUTH_AND_REGISTRATION.md)** for the full flow and how to restrict sign-ups by email domain (e.g. to keep users tenant- or application-specific).
 
 ### Children Under 14 (Long-term Solution)
 
-**Important Design Decision**: Children under 14 do not require auth accounts. This is a long-term architectural decision that provides:
+**Important Design Decision**: Children under 14 do not require auth accounts. This eliminates unique-email generation and auth-account creation for children.
 
-1. **Simplified Onboarding**: Parents can add children without creating separate login accounts
-2. **Email Management**: Children use parent's email by default, which can be updated later
-3. **Future Account Creation**: When children turn 14+, they can create their own account using their email
-4. **No Email Conflicts**: No need to generate unique emails for children
+**Design principles**:
+1. **No Auth Accounts for Children Under 14**: Children don't need login accounts, so we don't create them.
+2. **Parent Email by Default**: Children use their parent's email by default, which can be updated later.
+3. **Future Account Creation**: When children turn 14+, they can create their own account using their email.
+4. **No Email Conflicts**: Use parent's email or a custom email set by the parent.
 
-**Data Model**:
-- `campus_circle.students.id` is now independent (not a FK to `auth.users`)
+**Data model**:
+- `campus_circle.students.id` is independent (not a FK to `auth.users`)
 - `campus_circle.students.email` stores the child's email (defaults to parent's email)
-- `campus_circle.students.auth_user_id` is NULL for children under 14
-- When a child turns 14+ and creates an account, `auth_user_id` is set to link to their auth account
+- `campus_circle.students.auth_user_id` is NULL for children under 14; set when the child creates an account at 14+
 
-**Migration**: See `migrations/009_update_students_for_children_under_14.sql` for the complete schema changes.
+**API**:
+- **POST /api/users/me/children**: Creates student record directly (no auth account). Body: `full_name`, `dob`, optional `email` (defaults to parent's email).
+- **PUT /api/users/me/children/{child_id}**: Parents can update child info, including email.
+- **GET /api/users/me/children**: Returns children with `email` and `auth_user_id`.
+
+**Workflow**: Parent adds child (name, optional email, DOB under 14) → student row created with `auth_user_id = NULL`. Parent can update child email later. When the child turns 14+, they can register with that email and the system can link via `auth_user_id`.
+
+**Schema**: The `students` table in `001_schema.sql` defines this. Related: `backend/app/api/users.py`, `backend/app/schemas.py` (ChildCreate, ChildUpdate), frontend `AddChildModal.js`, `ChildSelectionModal.js`.
 
 ## Test Users
 
@@ -190,24 +163,17 @@ To create test users:
 
 ## Backup and Restore
 
-### Using Backup Scripts (Recommended)
-
-The project includes convenient backup and restore scripts:
+Backups and optional initial/demo data live in **`database/backup/`**. Use the database script (reads credentials from `.env`):
 
 ```bash
-# Create a backup
-./scripts/backup-db.sh [backup-name]
+# Create a backup (writes to database/backup/backup_YYYYMMDD_HHMMSS.sql)
+python infra/scripts/db.py backup
 
-# Restore from backup
-./scripts/restore-db.sh <backup-name>
+# Restore from a backup file
+python infra/scripts/db.py restore database/backup/backup_20240101_120000.sql
 ```
 
-The backup includes:
-- `campus_circle` schema (all tables, indexes, constraints)
-- `campus_circle_auth` schema (authentication tables)
-- All data from both schemas
-
-Backups are stored in the `backups/` directory with timestamps.
+Backup requires `pg_dump`; restore requires `psql`. Backups include `campus_circle` and `campus_circle_auth` schemas and data.
 
 ### Manual Backup
 
@@ -299,4 +265,4 @@ SUPABASE_DB_PASSWORD=your_password
 - Indexes are created for frequently queried columns
 - The `campus_circle` schema keeps the application data isolated from other projects
 - The `campus_circle_auth` schema provides isolated authentication for portability
-- Both schemas can be backed up and restored independently using the provided scripts
+- Use `python infra/scripts/db.py migrate` to apply migrations to Supabase or local Postgres without opening the SQL editor

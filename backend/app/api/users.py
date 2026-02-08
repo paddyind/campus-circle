@@ -7,35 +7,62 @@ from app.auth.dependencies import get_current_user
 
 router = APIRouter()
 
+
+def _validate_email_domain(email: str) -> None:
+    """Raise HTTPException if ALLOWED_EMAIL_DOMAINS is set and email domain is not allowed."""
+    from app.core.config import ALLOWED_EMAIL_DOMAINS
+    if not ALLOWED_EMAIL_DOMAINS:
+        return
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Invalid email format.")
+    domain = email.split("@", 1)[1].strip().lower()
+    if domain not in ALLOWED_EMAIL_DOMAINS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Registration is only allowed for emails from: {', '.join(ALLOWED_EMAIL_DOMAINS)}",
+        )
+
+
+def _sync_auth_user_to_campus_circle_auth(auth_user_id: str, email: str) -> None:
+    """Ensure auth user exists in campus_circle_auth.users (required for FK from campus_circle.users)."""
+    execute_query(
+        """INSERT INTO campus_circle_auth.users (id, email, email_confirmed_at)
+           VALUES (%s, %s, NOW())
+           ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, email_confirmed_at = EXCLUDED.email_confirmed_at""",
+        (auth_user_id, email),
+    )
+
 @router.post("/register/parent", status_code=201)
 async def register_parent(user_data: ParentCreate):
     try:
+        _validate_email_domain(user_data.email)
+
         from app.core.config import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
         import requests
-        
-        # Use Admin API to create user with auto_confirm
+
         admin_url = f"{SUPABASE_URL}/auth/v1/admin/users"
         headers = {
             'apikey': SUPABASE_SERVICE_ROLE_KEY,
             'Authorization': f'Bearer {SUPABASE_SERVICE_ROLE_KEY}',
             'Content-Type': 'application/json'
         }
-        
-        # Check if user already exists
-        check_response = requests.get(f"{admin_url}?email={user_data.email}", headers=headers)
+
+        # Check if user already exists in Auth (list users and find by email)
+        check_response = requests.get(admin_url, headers=headers, timeout=10)
         if check_response.status_code == 200:
             existing_users = check_response.json().get('users', [])
-            if existing_users:
-                auth_user_id = existing_users[0]['id']
-                # Check if already in campus_circle
+            email_lower = user_data.email.lower()
+            match = next((u for u in existing_users if (u.get('email') or '').lower() == email_lower), None)
+            if match:
+                auth_user_id = match['id']
                 existing_user = execute_query_one(
                     "SELECT id FROM campus_circle.users WHERE id = %s",
                     (auth_user_id,)
                 )
                 if existing_user:
                     raise HTTPException(status_code=400, detail="User already registered in Campus Circle")
-                
-                # Link existing auth user to campus_circle
+
+                _sync_auth_user_to_campus_circle_auth(auth_user_id, user_data.email)
                 execute_query(
                     "INSERT INTO campus_circle.users (id, role) VALUES (%s, %s) ON CONFLICT (id) DO UPDATE SET role = %s",
                     (auth_user_id, 'parent', 'parent')
@@ -45,7 +72,7 @@ async def register_parent(user_data: ParentCreate):
                     (auth_user_id, user_data.email, user_data.full_name, user_data.phone or 'N/A', user_data.email, user_data.full_name, user_data.phone or 'N/A')
                 )
                 return {"message": "Account linked to Campus Circle successfully. You can now use Campus Circle with your existing account."}
-        
+
         # Create new user via Admin API
         user_data_payload = {
             'email': user_data.email,
@@ -57,16 +84,15 @@ async def register_parent(user_data: ParentCreate):
                 'role': 'parent'
             }
         }
-        
-        create_response = requests.post(admin_url, headers=headers, json=user_data_payload)
+        create_response = requests.post(admin_url, headers=headers, json=user_data_payload, timeout=10)
         if create_response.status_code not in [200, 201]:
             error_text = create_response.text[:200]
             raise HTTPException(status_code=400, detail=f"Failed to create user: {error_text}")
-        
+
         auth_user = create_response.json()
         auth_user_id = auth_user['id']
 
-        # Insert into campus_circle schema tables using direct database queries
+        _sync_auth_user_to_campus_circle_auth(auth_user_id, user_data.email)
         execute_query(
             "INSERT INTO campus_circle.users (id, role) VALUES (%s, %s) ON CONFLICT (id) DO UPDATE SET role = %s",
             (auth_user_id, 'parent', 'parent')
@@ -169,7 +195,7 @@ async def login(credentials: UserLogin):
                         logger.error(f"Email confirmation error: {str(confirm_error)}")
                         raise HTTPException(
                             status_code=401,
-                            detail="Email confirmation required. Please run './scripts/setup-admin.sh --disable-email-confirmation' to disable email confirmation for development, or check your email to confirm your account."
+                            detail="Email confirmation required. Please run './infra/scripts/setup-test-users.sh --disable-email-confirmation' for instructions, or check your email to confirm your account."
                         )
                 else:
                     # Email confirmation is enabled - user must confirm email
@@ -303,7 +329,7 @@ async def login(credentials: UserLogin):
             if not ENABLE_EMAIL_CONFIRMATION:
                 raise HTTPException(
                     status_code=401,
-                    detail="Email confirmation required. Please run './scripts/setup-admin.sh --disable-email-confirmation' to disable email confirmation for development."
+                    detail="Email confirmation required. Run ./infra/scripts/setup-test-users.sh --disable-email-confirmation for instructions."
                 )
             else:
                 raise HTTPException(status_code=401, detail="Email not confirmed. Please check your email or contact support.")
@@ -314,55 +340,50 @@ async def login(credentials: UserLogin):
 @router.post("/register/student", status_code=201)
 async def register_student(user_data: StudentCreate):
     try:
-        # Check if password is provided (required for students 14+)
         if not user_data.password:
             raise HTTPException(status_code=400, detail="Password is required for students 14 and older")
+        _validate_email_domain(user_data.email)
 
         from app.core.config import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
         import requests
-        
-        # Use Admin API to create user with auto_confirm
+
         admin_url = f"{SUPABASE_URL}/auth/v1/admin/users"
         headers = {
             'apikey': SUPABASE_SERVICE_ROLE_KEY,
             'Authorization': f'Bearer {SUPABASE_SERVICE_ROLE_KEY}',
             'Content-Type': 'application/json'
         }
-        
-        # Check if user already exists
-        check_response = requests.get(f"{admin_url}?email={user_data.email}", headers=headers)
+
+        check_response = requests.get(admin_url, headers=headers, timeout=10)
         if check_response.status_code == 200:
             existing_users = check_response.json().get('users', [])
-            if existing_users:
-                auth_user_id = existing_users[0]['id']
-                # Check if already in campus_circle
+            email_lower = user_data.email.lower()
+            match = next((u for u in existing_users if (u.get('email') or '').lower() == email_lower), None)
+            if match:
+                auth_user_id = match['id']
                 existing_user = execute_query_one(
                     "SELECT id FROM campus_circle.users WHERE id = %s",
                     (auth_user_id,)
                 )
                 if existing_user:
                     raise HTTPException(status_code=400, detail="User already registered in Campus Circle")
-                
-                # Link existing auth user to campus_circle
+
+                _sync_auth_user_to_campus_circle_auth(auth_user_id, user_data.email)
                 execute_query(
                     "INSERT INTO campus_circle.users (id, role) VALUES (%s, %s) ON CONFLICT (id) DO UPDATE SET role = %s",
                     (auth_user_id, 'student', 'student')
                 )
                 execute_query(
-                    "INSERT INTO campus_circle.students (id, full_name, dob, status) VALUES (%s, %s, %s, %s) ON CONFLICT (id) DO UPDATE SET full_name = %s, dob = %s, status = %s",
-                    (auth_user_id, user_data.full_name, user_data.dob.isoformat() if user_data.dob else None, 'active', user_data.full_name, user_data.dob.isoformat() if user_data.dob else None, 'active')
+                    "INSERT INTO campus_circle.students (id, auth_user_id, full_name, dob, status) VALUES (%s, %s, %s, %s, %s) ON CONFLICT (id) DO UPDATE SET auth_user_id = EXCLUDED.auth_user_id, full_name = EXCLUDED.full_name, dob = EXCLUDED.dob, status = EXCLUDED.status",
+                    (auth_user_id, auth_user_id, user_data.full_name, user_data.dob.isoformat() if user_data.dob else None, 'active')
                 )
-                
-                # If parent_id is provided, link student to parent
                 if user_data.parent_id:
                     execute_query(
                         "INSERT INTO campus_circle.parent_students (parent_id, student_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
                         (user_data.parent_id, auth_user_id)
                     )
-                
                 return {"message": "Account linked to Campus Circle successfully. You can now use Campus Circle with your existing account."}
-        
-        # Create new user via Admin API
+
         user_data_payload = {
             'email': user_data.email,
             'password': user_data.password,
@@ -373,26 +394,23 @@ async def register_student(user_data: StudentCreate):
                 'role': 'student'
             }
         }
-        
-        create_response = requests.post(admin_url, headers=headers, json=user_data_payload)
+        create_response = requests.post(admin_url, headers=headers, json=user_data_payload, timeout=10)
         if create_response.status_code not in [200, 201]:
             error_text = create_response.text[:200]
             raise HTTPException(status_code=400, detail=f"Failed to create user: {error_text}")
-        
+
         auth_user = create_response.json()
         auth_user_id = auth_user['id']
 
-        # Insert into campus_circle schema tables using direct database queries
+        _sync_auth_user_to_campus_circle_auth(auth_user_id, user_data.email)
         execute_query(
             "INSERT INTO campus_circle.users (id, role) VALUES (%s, %s) ON CONFLICT (id) DO UPDATE SET role = %s",
             (auth_user_id, 'student', 'student')
         )
         execute_query(
-            "INSERT INTO campus_circle.students (id, full_name, dob, status) VALUES (%s, %s, %s, %s) ON CONFLICT (id) DO UPDATE SET full_name = %s, dob = %s, status = %s",
-            (auth_user_id, user_data.full_name, user_data.dob.isoformat() if user_data.dob else None, 'active', user_data.full_name, user_data.dob.isoformat() if user_data.dob else None, 'active')
+            "INSERT INTO campus_circle.students (id, auth_user_id, full_name, dob, status) VALUES (%s, %s, %s, %s, %s) ON CONFLICT (id) DO UPDATE SET auth_user_id = EXCLUDED.auth_user_id, full_name = EXCLUDED.full_name, dob = EXCLUDED.dob, status = EXCLUDED.status",
+            (auth_user_id, auth_user_id, user_data.full_name, user_data.dob.isoformat() if user_data.dob else None, 'active')
         )
-
-        # If parent_id is provided, link student to parent
         if user_data.parent_id:
             execute_query(
                 "INSERT INTO campus_circle.parent_students (parent_id, student_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
