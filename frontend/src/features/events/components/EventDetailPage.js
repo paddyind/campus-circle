@@ -4,6 +4,7 @@ import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import { fetchEventById, registerForEvent } from '../eventsSlice';
 import { fetchMyEvents, fetchProfile } from '../../dashboard/dashboardSlice';
 import ChildSelectionModal from './ChildSelectionModal';
+import RegistrationsModal from './RegistrationsModal';
 
 const EventDetailPage = () => {
   const { id } = useParams();
@@ -14,8 +15,10 @@ const EventDetailPage = () => {
   const { token, user } = useSelector((state) => state.auth);
   const { profile } = useSelector((state) => state.dashboard);
   const isAdmin = user?.role === 'admin' || profile?.role === 'admin';
+  const canViewRegistrations = ['admin', 'event_organizer', 'event_owner'].some(role => role === user?.role || role === profile?.role);
   const isParent = user?.role === 'parent' || profile?.role === 'parent';
   const [showChildModal, setShowChildModal] = useState(false);
+  const [showRegistrationsModal, setShowRegistrationsModal] = useState(false);
   
   // Determine back link based on where user came from
   const fromManageEvents = location.state?.from === 'manage-events' || location.pathname.includes('/admin');
@@ -111,20 +114,32 @@ const EventDetailPage = () => {
 
           {(currentEvent.max_registrations || currentEvent.current_registrations) && (
             <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-              <h2 className="text-xl font-semibold text-gray-800 mb-2">Registration Status</h2>
-              <p className="text-gray-600">
-                <strong>Registered:</strong> {currentEvent.current_registrations || 0}
-                {currentEvent.max_registrations && (
-                  <>
-                    {' / '}
-                    <strong>{currentEvent.max_registrations}</strong>
-                    {' spots available'}
-                    {currentEvent.current_registrations >= currentEvent.max_registrations && (
-                      <span className="ml-2 text-red-600 font-semibold">(Event Full)</span>
+              <div className="flex justify-between items-start">
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-800 mb-2">Registration Status</h2>
+                  <p className="text-gray-600">
+                    <strong>Registered:</strong> {currentEvent.current_registrations || 0}
+                    {currentEvent.max_registrations && (
+                      <>
+                        {' / '}
+                        <strong>{currentEvent.max_registrations}</strong>
+                        {' spots available'}
+                        {currentEvent.current_registrations >= currentEvent.max_registrations && (
+                          <span className="ml-2 text-red-600 font-semibold">(Event Full)</span>
+                        )}
+                      </>
                     )}
-                  </>
+                  </p>
+                </div>
+                {canViewRegistrations && (
+                  <button
+                    onClick={() => setShowRegistrationsModal(true)}
+                    className="mt-1 bg-indigo-100 text-indigo-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-200 transition-colors"
+                  >
+                    View Registered Members
+                  </button>
                 )}
-              </p>
+              </div>
             </div>
           )}
 
@@ -162,6 +177,15 @@ const EventDetailPage = () => {
           onClose={() => setShowChildModal(false)}
           onSelect={handleChildSelect}
           eventId={id}
+        />
+      )}
+
+      {showRegistrationsModal && (
+        <RegistrationsModal
+          eventId={id}
+          eventTitle={currentEvent.title}
+          isOpen={showRegistrationsModal}
+          onClose={() => setShowRegistrationsModal(false)}
         />
       )}
     </div>
