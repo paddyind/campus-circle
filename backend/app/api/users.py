@@ -609,7 +609,8 @@ async def get_my_events(current_user: dict = Depends(get_current_user)):
             f"""SELECT id, school_id, title, description, 
                 TO_CHAR(start_time AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS start_time,
                 TO_CHAR(end_time AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS end_time,
-                location, is_published
+                location, is_published, max_registrations,
+                TO_CHAR(registration_cancellation_cutoff AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS registration_cancellation_cutoff
                 FROM campus_circle.events 
                 WHERE id IN ({placeholders}) AND is_published = TRUE
                 ORDER BY start_time""",
@@ -720,6 +721,107 @@ async def register_for_event(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error registering for event: {str(e)[:100]}")
+
+@router.get("/me/events/{event_id}/registrations")
+async def get_my_registrations_for_event(event_id: str, current_user: dict = Depends(get_current_user)):
+    """Return current user's registrations for this event: for student self, for parent list of registered children (student_id, full_name)."""
+    user_id = current_user.get("sub") or current_user.get("id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="User ID not found in token")
+    try:
+        user_row = execute_query_one("SELECT role FROM campus_circle.users WHERE id = %s", (user_id,))
+        if not user_row:
+            return {"registrations": []}
+        role = user_row["role"]
+        if role == "student":
+            row = execute_query_one(
+                """SELECT er.student_id, s.full_name
+                   FROM campus_circle.event_registrations er
+                   JOIN campus_circle.students s ON s.id = er.student_id
+                   WHERE er.event_id = %s AND er.student_id = %s""",
+                (event_id, user_id),
+            )
+            if not row:
+                return {"registrations": []}
+            return {"registrations": [{"student_id": str(row["student_id"]), "full_name": row["full_name"] or "Me"}]}
+        if role == "parent":
+            rows = execute_query(
+                """SELECT s.id AS student_id, s.full_name
+                   FROM campus_circle.event_registrations er
+                   JOIN campus_circle.students s ON s.id = er.student_id
+                   JOIN campus_circle.parent_students ps ON ps.student_id = s.id AND ps.parent_id = %s
+                   WHERE er.event_id = %s""",
+                (user_id, event_id),
+            )
+            return {
+                "registrations": [{"student_id": str(r["student_id"]), "full_name": r["full_name"] or "Child"} for r in (rows or [])]
+            }
+        return {"registrations": []}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)[:100])
+
+@router.delete("/events/{event_id}/register", status_code=200)
+async def cancel_registration(
+    event_id: str,
+    registration_data: Optional[EventRegistrationRequest] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Cancel a registration. Allowed until event's registration_cancellation_cutoff (or event start_time if null)."""
+    user_id = current_user.get("sub") or current_user.get("id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="User ID not found in token")
+    try:
+        event = execute_query_one(
+            "SELECT id, start_time, registration_cancellation_cutoff FROM campus_circle.events WHERE id = %s",
+            (event_id,)
+        )
+        if not event:
+            raise HTTPException(status_code=404, detail="Event not found")
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        cutoff = event.get("registration_cancellation_cutoff") or event.get("start_time")
+        if cutoff:
+            cutoff_dt = cutoff if hasattr(cutoff, "tzinfo") else datetime.fromisoformat(str(cutoff).replace("Z", "+00:00"))
+            if now >= cutoff_dt:
+                raise HTTPException(status_code=400, detail="Cancellation deadline has passed")
+        user_row = execute_query_one("SELECT role FROM campus_circle.users WHERE id = %s", (user_id,))
+        if not user_row:
+            raise HTTPException(status_code=404, detail="User not found")
+        role = user_row["role"]
+        if role == "admin":
+            raise HTTPException(status_code=403, detail="Admins cannot cancel event registration here")
+        student_id = None
+        if role == "student":
+            student_id = user_id
+        elif role == "parent":
+            if not registration_data or not registration_data.student_id:
+                raise HTTPException(status_code=400, detail="Please select a child to cancel for")
+            student_id = registration_data.student_id
+            parent_student = execute_query_one(
+                "SELECT 1 FROM campus_circle.parent_students WHERE parent_id = %s AND student_id = %s",
+                (user_id, student_id)
+            )
+            if not parent_student:
+                raise HTTPException(status_code=403, detail="You can only cancel for your own children")
+        else:
+            raise HTTPException(status_code=403, detail="Invalid role")
+        existing = execute_query_one(
+            "SELECT 1 FROM campus_circle.event_registrations WHERE event_id = %s AND student_id = %s",
+            (event_id, student_id)
+        )
+        if not existing:
+            raise HTTPException(status_code=404, detail="Registration not found")
+        execute_query(
+            "DELETE FROM campus_circle.event_registrations WHERE event_id = %s AND student_id = %s",
+            (event_id, student_id)
+        )
+        return {"message": "Registration cancelled"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)[:150])
 
 @router.post("/me/children", status_code=201)
 async def add_child(child_data: ChildCreate, current_user: dict = Depends(get_current_user)):

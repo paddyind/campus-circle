@@ -117,6 +117,32 @@ export const fetchEventRegistrations = createAsyncThunk(
   }
 );
 
+export const cancelRegistration = createAsyncThunk(
+  'events/cancelRegistration',
+  async ({ eventId, studentId = null }, { getState, rejectWithValue }) => {
+    try {
+      const { token } = getState().auth;
+      if (!token) return rejectWithValue('Please login to cancel');
+      const body = studentId ? JSON.stringify({ student_id: studentId }) : undefined;
+      const response = await fetch(getApiUrl(`/users/events/${eventId}/register`), {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          ...(body && { 'Content-Type': 'application/json' }),
+        },
+        ...(body && { body }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || 'Failed to cancel registration');
+      }
+      return eventId;
+    } catch (error) {
+      return rejectWithValue(error.message || 'Failed to cancel');
+    }
+  }
+);
+
 const initialState = {
   events: [],
   currentEvent: null,
@@ -193,6 +219,15 @@ const eventsSlice = createSlice({
       .addCase(fetchEventRegistrations.rejected, (state, action) => {
         state.currentEventRegistrations.loading = false;
         state.currentEventRegistrations.error = action.payload;
+      })
+      .addCase(cancelRegistration.fulfilled, (state, action) => {
+        if (state.registeredEvents && action.payload) {
+          state.registeredEvents = state.registeredEvents.filter((id) => id !== action.payload);
+        }
+        state.error = null;
+      })
+      .addCase(cancelRegistration.rejected, (state, action) => {
+        state.error = action.payload;
       });
   },
 });

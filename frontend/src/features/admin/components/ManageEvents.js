@@ -8,11 +8,24 @@ const getApiUrl = (endpoint) => {
   return `${base}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 };
 
+const emptyEventForm = () => ({
+  title: '',
+  description: '',
+  start_time: '',
+  end_time: '',
+  location: '',
+  school_id: '',
+  max_registrations: '',
+  is_published: true,
+  registration_cancellation_cutoff: '',
+});
+
 const ManageEvents = () => {
   const { token } = useSelector((state) => state.auth);
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [schools, setSchools] = useState([]);
 
   // Modal state
   const [showModal, setShowModal] = useState(false);
@@ -27,9 +40,32 @@ const ManageEvents = () => {
     total: 0
   });
 
+  // Create / Edit event
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [eventForm, setEventForm] = useState(emptyEventForm());
+  const [formLoading, setFormLoading] = useState(false);
+  const [formError, setFormError] = useState(null);
+  const [editingEventId, setEditingEventId] = useState(null);
+
   useEffect(() => {
     fetchEvents();
+    fetchSchools();
   }, []);
+
+  const fetchSchools = async () => {
+    try {
+      const response = await fetch(getApiUrl('/events/schools/'), {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setSchools(data || []);
+      }
+    } catch {
+      setSchools([]);
+    }
+  };
 
   const fetchEvents = async () => {
     try {
@@ -100,6 +136,22 @@ const ManageEvents = () => {
     setRegError(null);
   };
 
+  const handleDeleteEvent = async (eventId) => {
+    try {
+      const response = await fetch(getApiUrl(`/events/${eventId}`), {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || `Failed to delete event: ${response.status}`);
+      }
+      await fetchEvents();
+    } catch (err) {
+      setError(err.message || 'Failed to delete event');
+    }
+  };
+
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -121,12 +173,258 @@ const ManageEvents = () => {
     );
   }
 
+  const openCreateModal = () => {
+    setEventForm(emptyEventForm());
+    setFormError(null);
+    setShowCreateModal(true);
+  };
+
+  const defaultCutoffFromStart = (startIso) => {
+    if (!startIso) return '';
+    const start = new Date(startIso);
+    const cutoff = new Date(start.getTime() - 48 * 60 * 60 * 1000);
+    return cutoff.toISOString().slice(0, 16);
+  };
+
+  const openEditModal = (event) => {
+    const start = event.start_time ? new Date(event.start_time).toISOString().slice(0, 16) : '';
+    const end = event.end_time ? new Date(event.end_time).toISOString().slice(0, 16) : '';
+    const cutoffRaw = event.registration_cancellation_cutoff ? new Date(event.registration_cancellation_cutoff).toISOString().slice(0, 16) : '';
+    const cutoff = cutoffRaw || defaultCutoffFromStart(event.start_time);
+    setEventForm({
+      title: event.title || '',
+      description: event.description || '',
+      start_time: start,
+      end_time: end,
+      location: event.location || '',
+      school_id: event.school_id || '',
+      max_registrations: event.max_registrations != null ? String(event.max_registrations) : '',
+      is_published: event.is_published !== false,
+      registration_cancellation_cutoff: cutoff,
+    });
+    setEditingEventId(event.id);
+    setFormError(null);
+    setShowEditModal(true);
+  };
+
+  const handleEventFormChange = (field, value) => {
+    setEventForm((prev) => {
+      const next = { ...prev, [field]: value };
+      if (field === 'start_time' && value && !prev.registration_cancellation_cutoff) {
+        next.registration_cancellation_cutoff = (() => {
+          const start = new Date(value);
+          const cutoff = new Date(start.getTime() - 48 * 60 * 60 * 1000);
+          return cutoff.toISOString().slice(0, 16);
+        })();
+      }
+      return next;
+    });
+  };
+
+  const buildEventPayload = () => {
+    const payload = {
+      title: eventForm.title.trim(),
+      description: eventForm.description.trim() || null,
+      location: eventForm.location.trim() || null,
+      school_id: eventForm.school_id || null,
+      is_published: eventForm.is_published,
+    };
+    if (eventForm.start_time) payload.start_time = new Date(eventForm.start_time).toISOString();
+    if (eventForm.end_time) payload.end_time = new Date(eventForm.end_time).toISOString();
+    const cutoffVal = eventForm.registration_cancellation_cutoff
+      ? new Date(eventForm.registration_cancellation_cutoff).toISOString()
+      : (eventForm.start_time ? new Date(new Date(eventForm.start_time).getTime() - 48 * 60 * 60 * 1000).toISOString() : null);
+    payload.registration_cancellation_cutoff = cutoffVal;
+    if (eventForm.max_registrations !== '') {
+      const n = parseInt(eventForm.max_registrations, 10);
+      if (!isNaN(n)) payload.max_registrations = n;
+    }
+    return payload;
+  };
+
+  const handleCreateEvent = async (e) => {
+    e.preventDefault();
+    if (!eventForm.title.trim()) {
+      setFormError('Title is required');
+      return;
+    }
+    setFormLoading(true);
+    setFormError(null);
+    try {
+      const response = await fetch(getApiUrl('/events/'), {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(buildEventPayload()),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || 'Failed to create event');
+      }
+      setShowCreateModal(false);
+      fetchEvents();
+    } catch (err) {
+      setFormError(err.message || 'Failed to create event');
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleUpdateEvent = async (e) => {
+    e.preventDefault();
+    if (!editingEventId || !eventForm.title.trim()) {
+      setFormError('Title is required');
+      return;
+    }
+    setFormLoading(true);
+    setFormError(null);
+    try {
+      const response = await fetch(getApiUrl(`/events/${editingEventId}`), {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(buildEventPayload()),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || 'Failed to update event');
+      }
+      setShowEditModal(false);
+      setEditingEventId(null);
+      fetchEvents();
+    } catch (err) {
+      setFormError(err.message || 'Failed to update event');
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const EventFormFields = ({ onSubmit, submitLabel }) => (
+    <form onSubmit={onSubmit} className="space-y-4">
+      {formError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm">{formError}</div>
+      )}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+        <input
+          type="text"
+          value={eventForm.title}
+          onChange={(e) => handleEventFormChange('title', e.target.value)}
+          className="w-full border border-gray-300 rounded-lg px-3 py-2"
+          required
+        />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+        <textarea
+          value={eventForm.description}
+          onChange={(e) => handleEventFormChange('description', e.target.value)}
+          className="w-full border border-gray-300 rounded-lg px-3 py-2"
+          rows={3}
+        />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Start time *</label>
+          <input
+            type="datetime-local"
+            value={eventForm.start_time}
+            onChange={(e) => handleEventFormChange('start_time', e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">End time</label>
+          <input
+            type="datetime-local"
+            value={eventForm.end_time}
+            onChange={(e) => handleEventFormChange('end_time', e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+          />
+        </div>
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+        <input
+          type="text"
+          value={eventForm.location}
+          onChange={(e) => handleEventFormChange('location', e.target.value)}
+          className="w-full border border-gray-300 rounded-lg px-3 py-2"
+        />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">School</label>
+        <select
+          value={eventForm.school_id}
+          onChange={(e) => handleEventFormChange('school_id', e.target.value)}
+          className="w-full border border-gray-300 rounded-lg px-3 py-2"
+        >
+          <option value="">— Select —</option>
+          {schools.map((s) => (
+            <option key={s.id} value={s.id}>{s.name}</option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Max registrations</label>
+        <input
+          type="number"
+          min="0"
+          value={eventForm.max_registrations}
+          onChange={(e) => handleEventFormChange('max_registrations', e.target.value)}
+          className="w-full border border-gray-300 rounded-lg px-3 py-2"
+        />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Cancel by (optional)</label>
+        <input
+          type="datetime-local"
+          value={eventForm.registration_cancellation_cutoff}
+          onChange={(e) => handleEventFormChange('registration_cancellation_cutoff', e.target.value)}
+          className="w-full border border-gray-300 rounded-lg px-3 py-2"
+        />
+        <p className="text-xs text-gray-500 mt-1">After this time, parents/students cannot cancel registration. Leave empty to use event start time.</p>
+      </div>
+      <div className="flex items-center">
+        <input
+          type="checkbox"
+          id="is_published"
+          checked={eventForm.is_published}
+          onChange={(e) => handleEventFormChange('is_published', e.target.checked)}
+          className="rounded border-gray-300"
+        />
+        <label htmlFor="is_published" className="ml-2 text-sm text-gray-700">Published (visible to users)</label>
+      </div>
+      <div className="flex justify-end gap-2 pt-2">
+        <button
+          type="button"
+          onClick={() => { setShowCreateModal(false); setShowEditModal(false); setFormError(null); }}
+          className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={formLoading}
+          className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+        >
+          {formLoading ? 'Saving...' : submitLabel}
+        </button>
+      </div>
+    </form>
+  );
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Manage Events</h1>
         <button 
-          onClick={() => alert('Create Event functionality coming soon')}
+          onClick={openCreateModal}
           className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700"
         >
           Create Event
@@ -158,33 +456,63 @@ const ManageEvents = () => {
                   <p>
                     <strong>Registrations:</strong> {event.current_registrations || 0} / {event.max_registrations || '∞'}
                   </p>
-                  {(event.current_registrations || 0) > 0 && (
-                    <button
-                      onClick={() => openRegistrationsModal(event.id, event.title)}
-                      className="text-indigo-600 hover:text-indigo-800 text-xs font-semibold"
-                    >
-                      View List
-                    </button>
-                  )}
                 </div>
               </div>
-              <div className="flex space-x-2">
+              <div className="flex flex-wrap gap-2">
                 <Link
                   to={`/events/${event.id}`}
                   state={{ from: 'manage-events' }}
-                  className="flex-1 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 text-center"
+                  className="flex-1 min-w-0 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 text-center"
                 >
                   View Details
                 </Link>
-                <button 
-                  onClick={() => alert('Edit functionality coming soon')}
-                  className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-300"
+                <button
+                  type="button"
+                  onClick={() => openEditModal(event)}
+                  className="flex-1 min-w-0 bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-300"
                 >
                   Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.confirm('Delete this event? Registrations will be removed.') && handleDeleteEvent(event.id)}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold bg-red-100 text-red-700 hover:bg-red-200"
+                >
+                  Delete
                 </button>
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Create Event Modal - content above overlay via relative z-10 */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-[100] overflow-y-auto" role="dialog" aria-modal="true">
+          <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20">
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 z-[101]" onClick={() => setShowCreateModal(false)} aria-hidden="true" />
+            <div className="relative z-[102] inline-block bg-white rounded-lg shadow-xl text-left overflow-hidden sm:my-8 sm:max-w-lg sm:w-full">
+              <div className="px-4 pt-5 pb-4 sm:p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Create Event</h3>
+                <EventFormFields onSubmit={handleCreateEvent} submitLabel="Create Event" />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Event Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 z-[100] overflow-y-auto" role="dialog" aria-modal="true">
+          <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20">
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 z-[101]" onClick={() => { setShowEditModal(false); setEditingEventId(null); }} aria-hidden="true" />
+            <div className="relative z-[102] inline-block bg-white rounded-lg shadow-xl text-left overflow-hidden sm:my-8 sm:max-w-lg sm:w-full">
+              <div className="px-4 pt-5 pb-4 sm:p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Edit Event</h3>
+                <EventFormFields onSubmit={handleUpdateEvent} submitLabel="Save Changes" />
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

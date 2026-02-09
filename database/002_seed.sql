@@ -29,12 +29,13 @@ INSERT INTO campus_circle.classes (id, school_id, name, year) VALUES
 ('770e8400-e29b-41d4-a716-44665544000c'::uuid, '550e8400-e29b-41d4-a716-446655440000'::uuid, 'Grade 12', 12)
 ON CONFLICT (id) DO NOTHING;
 
+-- Event dates are in the future so they appear in the app (API filters out past events).
 INSERT INTO campus_circle.events (id, school_id, title, description, start_time, end_time, location, is_published, max_registrations) VALUES
-('660e8400-e29b-41d4-a716-446655440000', '550e8400-e29b-41d4-a716-446655440000', 'Demo_Annual Science Fair', 'A showcase of student science projects.', '2024-09-15 10:00:00+00', '2024-09-15 14:00:00+00', 'Main Auditorium', TRUE, 100),
-('660e8400-e29b-41d4-a716-446655440001', '550e8400-e29b-41d4-a716-446655440000', 'Demo_Parent-Teacher Conference', 'Discuss progress with teachers.', '2024-10-01 08:00:00+00', '2024-10-01 17:00:00+00', 'School Campus', TRUE, 50),
-('660e8400-e29b-41d4-a716-446655440002', '550e8400-e29b-41d4-a716-446655440000', 'Demo_Sports Day', 'Inter-house sports competition.', '2024-10-20 09:00:00+00', '2024-10-20 16:00:00+00', 'Sports Ground', TRUE, 200),
-('660e8400-e29b-41d4-a716-446655440003', '550e8400-e29b-41d4-a716-446655440000', 'Demo_Cultural Festival', 'Arts, music, and culture.', '2024-11-10 10:00:00+00', '2024-11-10 18:00:00+00', 'Cultural Center', TRUE, 150),
-('660e8400-e29b-41d4-a716-446655440004', '550e8400-e29b-41d4-a716-446655440000', 'Demo_Math Olympiad', 'Mathematics competition.', '2024-11-20 09:00:00+00', '2024-11-20 12:00:00+00', 'Examination Hall', TRUE, 50)
+('660e8400-e29b-41d4-a716-446655440000', '550e8400-e29b-41d4-a716-446655440000', 'Demo_Annual Science Fair', 'A showcase of student science projects.', '2026-09-15 10:00:00+00', '2026-09-15 14:00:00+00', 'Main Auditorium', TRUE, 100),
+('660e8400-e29b-41d4-a716-446655440001', '550e8400-e29b-41d4-a716-446655440000', 'Demo_Parent-Teacher Conference', 'Discuss progress with teachers.', '2026-10-01 08:00:00+00', '2026-10-01 17:00:00+00', 'School Campus', TRUE, 50),
+('660e8400-e29b-41d4-a716-446655440002', '550e8400-e29b-41d4-a716-446655440000', 'Demo_Sports Day', 'Inter-house sports competition.', '2026-10-20 09:00:00+00', '2026-10-20 16:00:00+00', 'Sports Ground', TRUE, 200),
+('660e8400-e29b-41d4-a716-446655440003', '550e8400-e29b-41d4-a716-446655440000', 'Demo_Cultural Festival', 'Arts, music, and culture.', '2026-11-10 10:00:00+00', '2026-11-10 18:00:00+00', 'Cultural Center', TRUE, 150),
+('660e8400-e29b-41d4-a716-446655440004', '550e8400-e29b-41d4-a716-446655440000', 'Demo_Math Olympiad', 'Mathematics competition.', '2026-11-20 09:00:00+00', '2026-11-20 12:00:00+00', 'Examination Hall', TRUE, 50)
 ON CONFLICT (id) DO UPDATE SET
   title = EXCLUDED.title,
   description = EXCLUDED.description,

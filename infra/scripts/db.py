@@ -70,12 +70,18 @@ def run_migrations(conn, paths_only=False):
     if not paths_only:
         print("Migrations done.")
 
-def migrate():
+def _require_psycopg2():
     try:
         import psycopg2
+        return psycopg2
     except ImportError:
-        print("Install psycopg2: pip install psycopg2-binary")
+        print("Install deps from project root: pip install -r backend/requirements.txt")
+        print("Or use project venv: python3 -m venv .venv && .venv/bin/pip install -r backend/requirements.txt")
+        print("Then run: ./infra/scripts/migrate.sh  or  .venv/bin/python3 infra/scripts/db.py migrate")
         sys.exit(1)
+
+def migrate():
+    psycopg2 = _require_psycopg2()
     p = get_conn_params()
     print(f"Connecting to {p['host']}:{p['port']}/{p['dbname']}...")
     conn = psycopg2.connect(**p)
@@ -88,11 +94,7 @@ def migrate():
         conn.close()
 
 def reset():
-    try:
-        import psycopg2
-    except ImportError:
-        print("Install psycopg2: pip install psycopg2-binary")
-        sys.exit(1)
+    psycopg2 = _require_psycopg2()
     p = get_conn_params()
     print(f"Connecting to {p['host']}:{p['port']}/{p['dbname']}...")
     conn = psycopg2.connect(**p)

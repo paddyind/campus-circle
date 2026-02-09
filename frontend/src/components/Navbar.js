@@ -9,6 +9,7 @@ const Navbar = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const { user, token } = useSelector((state) => state.auth);
+  const isAuthenticated = Boolean(token && user);
   const { profile } = useSelector((state) => state.dashboard);
   const [isOpen, setIsOpen] = useState(false);
 
@@ -37,6 +38,7 @@ const Navbar = () => {
   const adminNavigation = [
     { name: 'Manage Users', href: '/admin/users', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z' },
     { name: 'Manage Events', href: '/admin/events', icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
+    { name: 'Manage Schools', href: '/admin/schools', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m3-3h2m-6 0h-2m4 0h-2m4 0H7m0 0v-2h14v2' },
     { name: 'Dashboard', href: '/dashboard/admin', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V9a2 2 0 012-2h2a2 2 0 012 2v10' },
   ];
 
@@ -60,10 +62,10 @@ const Navbar = () => {
 
   const isActive = (path) => location.pathname === path;
 
-  // Combine navigation items based on user role
+  // Combine navigation items based on user role (only show auth nav when token is validated and user is set)
   const userRole = user?.role || profile?.role;
-  const navItems = token 
-    ? (userRole === 'admin' 
+  const navItems = isAuthenticated
+    ? (userRole === 'admin'
         ? [...adminNavigation, ...publicNavigation, ...secondaryNavigation]
         : [...authNavigation, ...publicNavigation, ...secondaryNavigation])
     : [...publicNavigation, ...secondaryNavigation];
@@ -106,7 +108,7 @@ const Navbar = () => {
           </div>
 
           <div className="hidden lg:flex lg:items-center lg:space-x-3 lg:ml-6">
-            {!token ? (
+            {!isAuthenticated ? (
               <Link
                 to="/login"
                 className="bg-white text-indigo-600 hover:bg-gray-50 px-5 py-2 rounded-lg text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200"
@@ -180,7 +182,7 @@ const Navbar = () => {
               </Link>
             ))}
             <div className="border-t border-white border-opacity-20 pt-3 mt-2 space-y-2">
-              {!token ? (
+              {!isAuthenticated ? (
                 <Link
                   to="/login"
                   onClick={() => setIsOpen(false)}

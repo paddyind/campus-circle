@@ -210,6 +210,7 @@ test_frontend() {
         "src/features/profile/components/AddChildModal.js"
         "src/features/admin/components/ManageUsers.js"
         "src/features/admin/components/ManageEvents.js"
+        "src/features/admin/components/ManageSchools.js"
     )
     
     for file in "${component_files[@]}"; do

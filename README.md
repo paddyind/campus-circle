@@ -143,6 +143,16 @@ This starts Nginx serving the built frontend (port 80).
 
 ## 🧪 Validation and Testing
 
+### Pre-deployment sanity check
+
+Run the automated sanity test (same as in CI) before deploying:
+
+```bash
+./infra/scripts/sanity-test.sh
+```
+
+This checks environment, Docker, database layout, backend/frontend structure, and docs. Fix any failures before deployment.
+
 ### Verify Database Setup
 
 ```bash
@@ -281,6 +291,31 @@ cd backend
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
+
+### Applying code changes (restart / rebuild)
+
+Code changes **do not apply** until the running services are restarted or rebuilt.
+
+- **Running backend and frontend locally**  
+  Stop the running processes (Ctrl+C), then start them again:
+  - Backend: `cd backend && uvicorn app.main:app --reload`
+  - Frontend: `cd frontend && npm start`
+
+- **Using Docker**  
+  Rebuild images and restart so containers use the new code:
+  ```bash
+  ./infra/scripts/docker-manage.sh build
+  ./infra/scripts/docker-manage.sh start    # or: docker-manage.sh dev (to include frontend)
+  ```
+  Or rebuild and start in one go:  
+  `docker-compose -f infra/docker-compose.yml --env-file .env up -d --build backend db`
+
+- **Database (for new columns, e.g. cancellation cutoff)**  
+  Run migrations after pulling or changing schema:
+  ```bash
+  python infra/scripts/db.py migrate
+  ```
+  With Docker: `./infra/scripts/docker-manage.sh migrate`
 
 ## 🗄️ Database Schema
 

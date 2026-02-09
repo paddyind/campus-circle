@@ -96,9 +96,11 @@ CREATE TABLE IF NOT EXISTS campus_circle.events (
   location TEXT,
   is_published BOOLEAN DEFAULT TRUE,
   max_registrations INTEGER,
+  registration_cancellation_cutoff TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
+COMMENT ON COLUMN campus_circle.events.registration_cancellation_cutoff IS 'After this time, users cannot cancel registration. If NULL, event start_time is used.';
 
 CREATE TABLE IF NOT EXISTS campus_circle.event_registrations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -40,14 +40,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Long-term solution for children under 14: No auth accounts required, email defaults to parent's email
 - Migration `009_update_students_for_children_under_14.sql` for new child data model
 - Documentation: `CHILDREN_UNDER_14_DESIGN.md` for architectural decisions
-- Consolidated migrations: `database/migrations/` with 001_schema, 002_seed, 003_children_under_14
+- Consolidated migrations: schema and seed in `database/` (001_schema.sql, 002_seed.sql)
 - Single database script `infra/scripts/db.py`: migrate, reset, backup, restore (uses .env; run Supabase updates without SQL editor)
 - Project layout: frontend, backend, database, docs, infra (Docker + scripts); helm and multi-DB support can extend infra
 
 ### Changed
 - Renamed seed events to have "Demo_" prefix for clarity
 - Consolidated documentation into README, ARCHITECTURE, and DATABASE
-- Database: all schema and seed in `database/migrations/` (001, 002, 003)
+- Database: all schema and seed in `database/` (001_schema.sql, 002_seed.sql)
 - Scripts: under `infra/scripts/` (db.py, docker-manage, setup-test-users, sanity-test)
 - Optimized Docker setup for development and production
 - Improved database schema isolation for portability

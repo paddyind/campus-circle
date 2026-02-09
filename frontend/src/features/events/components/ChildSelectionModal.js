@@ -6,7 +6,8 @@ const getApiUrl = (endpoint) => {
   return `${base}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 };
 
-const ChildSelectionModal = ({ isOpen, onClose, onSelect, onAddChild, eventId }) => {
+const ChildSelectionModal = ({ isOpen, onClose, onSelect, onAddChild, eventId, title }) => {
+  const isCancelMode = Boolean(title);
   const [children, setChildren] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -132,8 +133,8 @@ const ChildSelectionModal = ({ isOpen, onClose, onSelect, onAddChild, eventId })
         <div className="p-6">
           <div className="flex justify-between items-center mb-4">
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">Register a Child for Event</h2>
-              <p className="text-sm text-gray-600 mt-1">Select an existing child or add a new one (under 14 years old)</p>
+              <h2 className="text-2xl font-bold text-gray-900">{title || 'Register a Child for Event'}</h2>
+              {!isCancelMode && <p className="text-sm text-gray-600 mt-1">Select an existing child or add a new one (under 14 years old)</p>}
             </div>
             <button
               onClick={onClose}
@@ -157,21 +158,27 @@ const ChildSelectionModal = ({ isOpen, onClose, onSelect, onAddChild, eventId })
                 <div className="text-center py-8">Loading children...</div>
               ) : children.length === 0 ? (
                 <div className="text-center py-8">
-                  <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                    <p className="text-gray-700 mb-2">
-                      <strong>No children added yet.</strong>
-                    </p>
-                    <p className="text-sm text-gray-600 mb-4">
-                      To register a child under 14 for events, you need to add their details first. 
-                      Children 14 and older must create their own student accounts.
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setShowAddForm(true)}
-                    className="bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 font-semibold"
-                  >
-                    + Add a Child (Under 14)
-                  </button>
+                  {isCancelMode ? (
+                    <p className="text-gray-600">No children in your account to cancel for.</p>
+                  ) : (
+                    <>
+                      <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                        <p className="text-gray-700 mb-2">
+                          <strong>No children added yet.</strong>
+                        </p>
+                        <p className="text-sm text-gray-600 mb-4">
+                          To register a child under 14 for events, you need to add their details first. 
+                          Children 14 and older must create their own student accounts.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setShowAddForm(true)}
+                        className="bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 font-semibold"
+                      >
+                        + Add a Child (Under 14)
+                      </button>
+                    </>
+                  )}
                 </div>
               ) : (
                 <>
@@ -207,20 +214,22 @@ const ChildSelectionModal = ({ isOpen, onClose, onSelect, onAddChild, eventId })
                       })}
                     </div>
                   </div>
-                  <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                    <p className="text-sm text-gray-700 mb-2">
-                      <strong>Need to add another child?</strong>
-                    </p>
-                    <p className="text-xs text-gray-600 mb-3">
-                      You can add children under 14 without creating a login account for them.
-                    </p>
-                    <button
-                      onClick={() => setShowAddForm(true)}
-                      className="w-full bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 font-semibold"
-                    >
-                      + Add a New Child (Under 14)
-                    </button>
-                  </div>
+                  {!isCancelMode && (
+                    <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-sm text-gray-700 mb-2">
+                        <strong>Need to add another child?</strong>
+                      </p>
+                      <p className="text-xs text-gray-600 mb-3">
+                        You can add children under 14 without creating a login account for them.
+                      </p>
+                      <button
+                        onClick={() => setShowAddForm(true)}
+                        className="w-full bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 font-semibold"
+                      >
+                        + Add a New Child (Under 14)
+                      </button>
+                    </div>
+                  )}
                 </>
               )}
             </>

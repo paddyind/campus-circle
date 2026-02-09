@@ -19,9 +19,10 @@ import ContactPage from './features/contact/components/ContactPage';
 import AboutPage from './components/AboutPage';
 import ManageUsers from './features/admin/components/ManageUsers';
 import ManageEvents from './features/admin/components/ManageEvents';
+import ManageSchools from './features/admin/components/ManageSchools';
 import ContactSubmissions from './features/admin/components/ContactSubmissions';
 import { fetchEvents } from './features/events/eventsSlice';
-import { setCredentials } from './features/auth/authSlice';
+import { setCredentials, logout } from './features/auth/authSlice';
 import { fetchProfile } from './features/dashboard/dashboardSlice';
 
 // Protected Route Component
@@ -190,42 +191,34 @@ function App() {
   const dispatch = useDispatch();
   const { token } = useSelector((state) => state.auth);
 
-  // Restore user session from localStorage on app load
+  // Validate stored token on load: if we have token but no user, verify with API; clear token if invalid
+  const { user } = useSelector((state) => state.auth);
   useEffect(() => {
-    const storedToken = localStorage.getItem('token');
-    if (storedToken && !token) {
-      // Token exists in localStorage but not in Redux - restore it
-      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-      const base = API_BASE_URL.endsWith('/api') ? API_BASE_URL : `${API_BASE_URL}/api`;
-      fetch(`${base}/users/me`, {
-        headers: {
-          'Authorization': `Bearer ${storedToken}`,
-        },
+    if (!token) return;
+    const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+    const base = API_BASE_URL.endsWith('/api') ? API_BASE_URL : `${API_BASE_URL}/api`;
+    fetch(`${base}/users/me`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    })
+      .then((response) => {
+        if (response.ok) return response.json();
+        dispatch(logout());
+        return null;
       })
-        .then((response) => {
-          if (response.ok) {
-            return response.json();
-          }
-          localStorage.removeItem('token');
-          return null;
-        })
-        .then((profile) => {
-          if (profile) {
-            dispatch(setCredentials({
-              user: {
-                id: profile.id,
-                email: profile.email,
-                name: profile.full_name,
-                role: profile.role,
-              },
-              token: storedToken,
-            }));
-          }
-        })
-        .catch(() => {
-          localStorage.removeItem('token');
-        });
-    }
+      .then((profile) => {
+        if (profile) {
+          dispatch(setCredentials({
+            user: {
+              id: profile.id,
+              email: profile.email,
+              name: profile.full_name,
+              role: profile.role,
+            },
+            token,
+          }));
+        }
+      })
+      .catch(() => dispatch(logout()));
   }, [dispatch, token]);
 
   return (
@@ -299,8 +292,16 @@ function App() {
               </ProtectedRoute>
             } 
           />
-          <Route 
-            path="/admin/events" 
+          <Route
+            path="/admin/schools"
+            element={
+              <ProtectedRoute>
+                <ManageSchools />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/events"
             element={
               <ProtectedRoute>
                 <ManageEvents />

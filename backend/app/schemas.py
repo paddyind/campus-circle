@@ -41,10 +41,43 @@ class EventCreate(BaseModel):
     location: Optional[str] = None
     school_id: Optional[str] = None
     max_registrations: Optional[int] = None
+    is_published: Optional[bool] = True
+    registration_cancellation_cutoff: Optional[str] = None
+
+class EventUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    location: Optional[str] = None
+    school_id: Optional[str] = None
+    max_registrations: Optional[int] = None
+    is_published: Optional[bool] = None
+    registration_cancellation_cutoff: Optional[str] = None
 
 class Event(EventCreate):
     id: str
     current_registrations: Optional[int] = 0
+
+    class Config:
+        from_attributes = True
+
+class SchoolCreate(BaseModel):
+    name: str
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    website: Optional[str] = None
+
+class SchoolUpdate(BaseModel):
+    name: Optional[str] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    website: Optional[str] = None
+
+class School(SchoolCreate):
+    id: str
 
     class Config:
         from_attributes = True

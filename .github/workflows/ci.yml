@@ -14,6 +14,13 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
+    - name: Create minimal .env for sanity tests
+      run: |
+        cp .env.example .env 2>/dev/null || true
+        for key in SUPABASE_URL SUPABASE_ANON_KEY SUPABASE_SERVICE_ROLE_KEY SUPABASE_DB_HOST SUPABASE_DB_PORT SUPABASE_DB_NAME SUPABASE_DB_USER SUPABASE_DB_PASSWORD; do
+          grep -q "^${key}=" .env 2>/dev/null || echo "${key}=placeholder" >> .env
+        done
+
     - name: Set up Python
       uses: actions/setup-python@v3
       with:
@@ -52,4 +59,4 @@ jobs:
 
     - name: Build production images
       run: |
-        docker compose -f infra/docker-compose.yml build
+        docker compose -f infra/docker-compose.yml --project-directory . build

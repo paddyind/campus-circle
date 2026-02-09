@@ -15,9 +15,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         # Skip auth for public paths
         public_paths = ["/", "/docs", "/openapi.json", "/redoc"]
-        # Allow GET requests to events endpoint (public viewing)
-        if request.url.path.startswith("/api/events") and request.method == "GET":
-            return await call_next(request)
+        # Allow GET for list and single event only (public viewing); require auth for /registrations and other sub-routes
+        if request.method == "GET" and request.url.path.startswith("/api/events"):
+            if "/registrations" not in request.url.path and request.url.path != "/api/events/schools/":
+                return await call_next(request)
         # Allow POST requests to user registration and login (public)
         if request.url.path.startswith("/api/users/register") or request.url.path == "/api/users/login":
             return await call_next(request)
@@ -71,7 +72,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
                     try:
                         payload = jwt.decode(
                             token,
-                            options={"verify_signature": False}
+                            key="",  # required by python-jose even when not verifying
+                            algorithms=["HS256"],
+                            options={"verify_signature": False},
                         )
                         request.state.user = payload
                     except Exception as decode_error:
@@ -82,7 +85,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 try:
                     payload = jwt.decode(
                         token,
-                        options={"verify_signature": False}
+                        key="",
+                        algorithms=["HS256"],
+                        options={"verify_signature": False},
                     )
                     request.state.user = payload
                 except Exception as decode_error:

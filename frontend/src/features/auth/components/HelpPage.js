@@ -18,28 +18,28 @@ const HelpPage = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
               {/* Parent Login */}
-              <div className="border border-gray-200 rounded-lg p-6 bg-blue-50">
+              <div className="border border-gray-200 rounded-lg p-6 bg-blue-50 min-w-0 overflow-hidden">
                 <h3 className="text-xl font-bold text-gray-800 mb-3">Parent Login</h3>
-                <div className="space-y-2 text-gray-700">
-                  <p><strong>Email:</strong> demo_parent@campuscircle.com</p>
+                <div className="space-y-2 text-gray-700 break-words">
+                  <p><strong>Email:</strong> <span className="break-all">demo_parent@campuscircle.com</span></p>
                   <p><strong>Password:</strong> password123</p>
                 </div>
               </div>
 
               {/* Student Login */}
-              <div className="border border-gray-200 rounded-lg p-6 bg-green-50">
+              <div className="border border-gray-200 rounded-lg p-6 bg-green-50 min-w-0 overflow-hidden">
                 <h3 className="text-xl font-bold text-gray-800 mb-3">Student Login</h3>
-                <div className="space-y-2 text-gray-700">
-                  <p><strong>Email:</strong> demo_student@campuscircle.com</p>
+                <div className="space-y-2 text-gray-700 break-words">
+                  <p><strong>Email:</strong> <span className="break-all">demo_student@campuscircle.com</span></p>
                   <p><strong>Password:</strong> password123</p>
                 </div>
               </div>
 
               {/* Admin Login */}
-              <div className="border border-gray-200 rounded-lg p-6 bg-purple-50">
+              <div className="border border-gray-200 rounded-lg p-6 bg-purple-50 min-w-0 overflow-hidden">
                 <h3 className="text-xl font-bold text-gray-800 mb-3">Admin Login</h3>
-                <div className="space-y-2 text-gray-700">
-                  <p><strong>Email:</strong> demo_admin@campuscircle.com</p>
+                <div className="space-y-2 text-gray-700 break-words">
+                  <p><strong>Email:</strong> <span className="break-all">demo_admin@campuscircle.com</span></p>
                   <p><strong>Password:</strong> password123</p>
                 </div>
               </div>

@@ -16,14 +16,10 @@ const CurrentEventsPage = () => {
   }, [dispatch]);
 
   useEffect(() => {
-    // Fetch profile and registered events if user is logged in
-    if (token) {
-      if (!profile) {
-        dispatch(fetchProfile());
-      }
-      dispatch(fetchMyEvents());
-    }
-  }, [dispatch, token, profile]);
+    if (!token) return;
+    if (!profile) dispatch(fetchProfile());
+    dispatch(fetchMyEvents());
+  }, [dispatch, token]); // Intentionally omit profile to avoid double fetch when profile loads
 
   const handleRegister = (eventId) => {
     const isParent = user?.role === 'parent' || profile?.role === 'parent';

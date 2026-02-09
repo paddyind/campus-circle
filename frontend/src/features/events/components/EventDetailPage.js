@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
-import { fetchEventById, registerForEvent } from '../eventsSlice';
+import { fetchEventById, registerForEvent, cancelRegistration } from '../eventsSlice';
 import { fetchMyEvents, fetchProfile } from '../../dashboard/dashboardSlice';
 import ChildSelectionModal from './ChildSelectionModal';
 import RegistrationsModal from './RegistrationsModal';
@@ -18,8 +18,11 @@ const EventDetailPage = () => {
   const canViewRegistrations = ['admin', 'event_organizer', 'event_owner'].some(role => role === user?.role || role === profile?.role);
   const isParent = user?.role === 'parent' || profile?.role === 'parent';
   const [showChildModal, setShowChildModal] = useState(false);
+  const [showCancelChildModal, setShowCancelChildModal] = useState(false);
   const [showRegistrationsModal, setShowRegistrationsModal] = useState(false);
-  
+  const [cancelError, setCancelError] = useState(null);
+  const [myRegistrations, setMyRegistrations] = useState([]); // { student_id, full_name }[] for cancel labels
+
   // Determine back link based on where user came from
   const fromManageEvents = location.state?.from === 'manage-events' || location.pathname.includes('/admin');
   const backLink = fromManageEvents ? '/admin/events' : '/events';
@@ -29,14 +32,25 @@ const EventDetailPage = () => {
   }, [dispatch, id]);
 
   useEffect(() => {
-    // Fetch registered events and profile if user is logged in
-    if (token) {
-      dispatch(fetchMyEvents());
-      if (!profile) {
-        dispatch(fetchProfile());
-      }
+    if (!token) return;
+    dispatch(fetchMyEvents());
+    if (!profile) dispatch(fetchProfile());
+  }, [dispatch, token]); // Omit profile to avoid refetch when profile loads
+
+  useEffect(() => {
+    if (!token || !id || !registeredEvents?.includes(id)) {
+      setMyRegistrations([]);
+      return;
     }
-  }, [dispatch, token, profile]);
+    const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+    const base = apiUrl.endsWith('/api') ? apiUrl : `${apiUrl}/api`;
+    fetch(`${base}/users/me/events/${id}/registrations`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    })
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((data) => setMyRegistrations(data.registrations || []))
+      .catch(() => setMyRegistrations([]));
+  }, [token, id, registeredEvents]);
 
   const handleRegister = () => {
     if (isParent) {
@@ -57,6 +71,33 @@ const EventDetailPage = () => {
     dispatch(registerForEvent({ eventId: id, studentId }));
   };
 
+  const handleCancelClick = () => {
+    setCancelError(null);
+    if (isParent) setShowCancelChildModal(true);
+    else {
+      dispatch(cancelRegistration({ eventId: id })).then((result) => {
+        if (cancelRegistration.fulfilled.match(result)) {
+          dispatch(fetchEventById(id));
+          dispatch(fetchMyEvents());
+        } else if (cancelRegistration.rejected.match(result)) {
+          setCancelError(result.payload || 'Failed to cancel');
+        }
+      });
+    }
+  };
+
+  const handleCancelChildSelect = (studentId) => {
+    setShowCancelChildModal(false);
+    dispatch(cancelRegistration({ eventId: id, studentId })).then((result) => {
+      if (cancelRegistration.fulfilled.match(result)) {
+        dispatch(fetchEventById(id));
+        dispatch(fetchMyEvents());
+      } else if (cancelRegistration.rejected.match(result)) {
+        setCancelError(result.payload || 'Failed to cancel');
+      }
+    });
+  };
+
   if (loading) {
     return <div className="text-center py-12">Loading...</div>;
   }
@@ -70,6 +111,8 @@ const EventDetailPage = () => {
   }
 
   const isRegistered = registeredEvents && registeredEvents.includes(currentEvent.id);
+  const cutoffDt = new Date(currentEvent.registration_cancellation_cutoff || currentEvent.start_time);
+  const canCancel = isRegistered && !isNaN(cutoffDt.getTime()) && new Date() < cutoffDt;
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -131,7 +174,7 @@ const EventDetailPage = () => {
                     )}
                   </p>
                 </div>
-                {canViewRegistrations && (
+                {canViewRegistrations && (currentEvent.current_registrations || 0) > 0 && (
                   <button
                     onClick={() => setShowRegistrationsModal(true)}
                     className="mt-1 bg-indigo-100 text-indigo-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-200 transition-colors"
@@ -143,12 +186,60 @@ const EventDetailPage = () => {
             </div>
           )}
 
+          {cancelError && (
+            <div className="mt-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{cancelError}</div>
+          )}
           {token && !isAdmin && (
-            <div className="mt-8">
+            <div className="mt-8 flex flex-col sm:flex-row gap-3">
               {isRegistered ? (
-                <Link to="/my-events" className="w-full bg-green-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-600 transition-colors text-center">
-                  View Registration
-                </Link>
+                <>
+                  <Link to="/my-events" className="flex-1 bg-green-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-600 transition-colors text-center">
+                    View Registration
+                  </Link>
+                  {canCancel && (
+                    isParent && myRegistrations.length > 0 ? (
+                      myRegistrations.map((r) => {
+                        const firstName = (r.full_name || '').trim().split(/\s+/)[0] || 'Child';
+                        return (
+                          <button
+                            key={r.student_id}
+                            type="button"
+                            onClick={() => {
+                              setCancelError(null);
+                              dispatch(cancelRegistration({ eventId: id, studentId: r.student_id })).then((result) => {
+                                if (cancelRegistration.fulfilled.match(result)) {
+                                  dispatch(fetchEventById(id));
+                                  dispatch(fetchMyEvents());
+                                } else if (cancelRegistration.rejected.match(result)) {
+                                  setCancelError(result.payload || 'Failed to cancel');
+                                }
+                              });
+                            }}
+                            className="flex-1 px-6 py-3 rounded-lg font-semibold border border-red-300 text-red-700 bg-white hover:bg-red-50 transition-colors"
+                          >
+                            Cancel {firstName}'s Registration
+                          </button>
+                        );
+                      })
+                    ) : isParent ? (
+                      <button
+                        type="button"
+                        onClick={handleCancelClick}
+                        className="flex-1 px-6 py-3 rounded-lg font-semibold border border-red-300 text-red-700 bg-white hover:bg-red-50 transition-colors"
+                      >
+                        Cancel a child's registration
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleCancelClick}
+                        className="flex-1 px-6 py-3 rounded-lg font-semibold border border-red-300 text-red-700 bg-white hover:bg-red-50 transition-colors"
+                      >
+                        Cancel My Registration
+                      </button>
+                    )
+                  )}
+                </>
               ) : (
                 <button 
                   onClick={handleRegister}
@@ -171,6 +262,15 @@ const EventDetailPage = () => {
         </div>
       </div>
       
+      {showCancelChildModal && (
+        <ChildSelectionModal
+          isOpen={showCancelChildModal}
+          onClose={() => { setShowCancelChildModal(false); setCancelError(null); }}
+          onSelect={handleCancelChildSelect}
+          eventId={id}
+          title="Select child to cancel registration"
+        />
+      )}
       {showChildModal && (
         <ChildSelectionModal
           isOpen={showChildModal}
