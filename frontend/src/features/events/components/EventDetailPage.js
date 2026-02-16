@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
+import { getApiUrl, getApiHeaders } from '../../../api/client';
 import { fetchEventById, registerForEvent, cancelRegistration } from '../eventsSlice';
 import { fetchMyEvents, fetchProfile } from '../../dashboard/dashboardSlice';
 import ChildSelectionModal from './ChildSelectionModal';
@@ -42,10 +43,8 @@ const EventDetailPage = () => {
       setMyRegistrations([]);
       return;
     }
-    const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-    const base = apiUrl.endsWith('/api') ? apiUrl : `${apiUrl}/api`;
-    fetch(`${base}/users/me/events/${id}/registrations`, {
-      headers: { 'Authorization': `Bearer ${token}` },
+    fetch(getApiUrl(`/users/me/events/${id}/registrations`), {
+      headers: getApiHeaders(token),
     })
       .then((res) => (res.ok ? res.json() : Promise.reject()))
       .then((data) => setMyRegistrations(data.registrations || []))

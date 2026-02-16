@@ -21,7 +21,7 @@ From project root:
 ```bash
 ./infra/scripts/docker-manage.sh dev    # Frontend + backend + DB
 ./infra/scripts/docker-manage.sh migrate
-python infra/scripts/db.py migrate      # Or apply to Supabase using .env
+./infra/scripts/run.sh db migrate      # Or apply to Supabase using .env
 ```
 
 See [infra/scripts/README.md](scripts/README.md) for all script usage.

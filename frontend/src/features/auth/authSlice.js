@@ -1,12 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-
-// Helper to build API URL (handles both with and without /api in base URL)
-const getApiUrl = (endpoint) => {
-  const base = API_BASE_URL.endsWith('/api') ? API_BASE_URL : `${API_BASE_URL}/api`;
-  return `${base}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
-};
+import { getApiUrl, getApiHeaders, setTenantSlug } from '../../api/client';
 
 // Helper function to handle fetch errors
 const handleFetchError = async (response, defaultMessage) => {
@@ -26,9 +20,7 @@ export const loginUser = createAsyncThunk('auth/loginUser', async (credentials, 
   try {
     const response = await fetch(getApiUrl('/users/login'), {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json', ...getApiHeaders() },
       body: JSON.stringify(credentials),
     });
 
@@ -40,12 +32,18 @@ export const loginUser = createAsyncThunk('auth/loginUser', async (credentials, 
     const data = await response.json();
     const token = data.access_token;
 
-    // Fetch user profile
     const profileResponse = await fetch(getApiUrl('/users/me'), {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
+      headers: getApiHeaders(token),
     });
+    const tenantsRes = await fetch(getApiUrl('/tenants/current'), { headers: getApiHeaders(token) });
+    let currentTenant = null;
+    let allowedSlugs = [];
+    if (tenantsRes.ok) {
+      const data = await tenantsRes.json();
+      currentTenant = data.tenant || null;
+      allowedSlugs = data.allowed_slugs || [];
+      if (currentTenant?.slug && !localStorage.getItem('tenant')) setTenantSlug(currentTenant.slug);
+    }
 
     if (profileResponse.ok) {
       const profile = await profileResponse.json();
@@ -56,17 +54,17 @@ export const loginUser = createAsyncThunk('auth/loginUser', async (credentials, 
           name: profile.full_name,
           role: profile.role,
         },
-        token: token,
+        token,
+        currentTenant,
+        allowedTenantSlugs: allowedSlugs,
       };
     }
 
-    // If profile fetch fails, return basic user info
     return {
-      user: {
-        email: credentials.email,
-        role: 'parent', // Default fallback
-      },
-      token: token,
+      user: { email: credentials.email, role: 'parent' },
+      token,
+      currentTenant,
+      allowedTenantSlugs: allowedSlugs,
     };
   } catch (error) {
     if (error.name === 'TypeError' && error.message.includes('fetch')) {
@@ -266,6 +264,8 @@ const getInitialState = () => {
     isAuthenticated: !!token,
     status: 'idle',
     error: null,
+    currentTenant: null,
+    allowedTenantSlugs: [],
   };
 };
 
@@ -281,7 +281,8 @@ const authSlice = createSlice({
       state.isAuthenticated = false;
       state.status = 'idle';
       state.error = null;
-      // Clear token from localStorage
+      state.currentTenant = null;
+      state.allowedTenantSlugs = [];
       localStorage.removeItem('token');
     },
     setCredentials: (state, action) => {
@@ -309,6 +310,8 @@ const authSlice = createSlice({
         state.user = action.payload.user;
         state.token = action.payload.token;
         state.error = null;
+        state.currentTenant = action.payload.currentTenant || null;
+        state.allowedTenantSlugs = action.payload.allowedTenantSlugs || [];
         if (action.payload.token) {
           localStorage.setItem('token', action.payload.token);
         }

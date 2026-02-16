@@ -1,4 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { getApiUrl, getApiHeaders } from '../../api/client';
 
 export const fetchProfile = createAsyncThunk(
   'dashboard/fetchProfile',
@@ -8,13 +9,8 @@ export const fetchProfile = createAsyncThunk(
       if (!token) {
         return rejectWithValue('Not authenticated');
       }
-
-      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-      const base = API_BASE_URL.endsWith('/api') ? API_BASE_URL : `${API_BASE_URL}/api`;
-      const response = await fetch(`${base}/users/me`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+      const response = await fetch(getApiUrl('/users/me'), {
+        headers: getApiHeaders(token),
       });
 
       if (!response.ok) {
@@ -42,12 +38,8 @@ export const fetchMyEvents = createAsyncThunk(
         return rejectWithValue('Not authenticated');
       }
 
-      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-      const base = API_BASE_URL.endsWith('/api') ? API_BASE_URL : `${API_BASE_URL}/api`;
-      const response = await fetch(`${base}/users/me/events`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+      const response = await fetch(getApiUrl('/users/me/events'), {
+        headers: getApiHeaders(token),
       });
 
       if (!response.ok) {

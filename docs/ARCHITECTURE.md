@@ -161,11 +161,21 @@ Nginx → Frontend (Static Files) + Backend (FastAPI) → Database (PostgreSQL)
 Port 80    /usr/share/nginx/html      Port 8000            Port 5432
 ```
 
+## Multi-Tenancy (Product Model)
+
+CampusCircle is structured for **tenant-based productization**:
+
+- **Default tenant: Demo-Circle** — The current deployment is the internal/default tenant "Demo-Circle". Its data lives in schemas `campus_circle` and `campus_circle_auth`. Demo-Circle has demo data and (in a future phase) admin privileges to create new client tenants.
+- **Tenant registry** — Table `public.tenants` lists all tenants (name, slug, schema_app, schema_auth, is_internal). See migration `003_tenant_registry.sql`.
+- **Future clients** — New tenants get their own schemas (e.g. `tenant_<slug>`) with the same structure as the baseline; data is fully separated by schema. See [TENANTS_AND_DEPLOYMENT.md](TENANTS_AND_DEPLOYMENT.md).
+
+For the current (first) phase, the app always uses Demo-Circle’s schemas; tenant resolution and create-tenant flows are planned for later phases.
+
 ## Database Architecture
 
 ### Schema Isolation
 
-The application uses isolated schemas for portability:
+The application uses isolated schemas per tenant. For **Demo-Circle** (default):
 
 - **`campus_circle`**: All application tables
 - **`campus_circle_auth`**: Isolated authentication (for local dev)
@@ -202,8 +212,8 @@ The application uses isolated schemas for portability:
 
 ## Backup and Recovery
 
-- **Database Backups**: Via `python infra/scripts/db.py backup` (writes to `database/backup/`)
+- **Database Backups**: Via `./infra/scripts/run.sh db backup` (writes to `database/backup/`)
 - **Schema Isolation**: Allows independent backup/restore
 - **Point-in-Time Recovery**: Available via Supabase (production)
 
-For detailed database schema information, see [DATABASE.md](DATABASE.md).
+For detailed database schema information, see [DATABASE.md](DATABASE.md). For the tenant model, baseline, and deployment (Firebase and free hosting), see [TENANTS_AND_DEPLOYMENT.md](TENANTS_AND_DEPLOYMENT.md).

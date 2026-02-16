@@ -1,10 +1,5 @@
 import React, { useState, useEffect } from 'react';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-const getApiUrl = (endpoint) => {
-  const base = API_BASE_URL.endsWith('/api') ? API_BASE_URL : `${API_BASE_URL}/api`;
-  return `${base}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
-};
+import { getApiUrl, getApiHeaders } from '../../../api/client';
 
 const ChildSelectionModal = ({ isOpen, onClose, onSelect, onAddChild, eventId, title }) => {
   const isCancelMode = Boolean(title);
@@ -30,9 +25,7 @@ const ChildSelectionModal = ({ isOpen, onClose, onSelect, onAddChild, eventId, t
         try {
           const token = localStorage.getItem('token');
           const response = await fetch(getApiUrl('/users/me'), {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
+            headers: getApiHeaders(token),
           });
           if (response.ok) {
             const profile = await response.json();
@@ -58,9 +51,7 @@ const ChildSelectionModal = ({ isOpen, onClose, onSelect, onAddChild, eventId, t
       setError(null);
       const token = localStorage.getItem('token');
       const response = await fetch(getApiUrl('/users/me/children'), {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: getApiHeaders(token),
       });
 
       if (!response.ok) {
@@ -85,10 +76,7 @@ const ChildSelectionModal = ({ isOpen, onClose, onSelect, onAddChild, eventId, t
       const token = localStorage.getItem('token');
       const response = await fetch(getApiUrl('/users/me/children'), {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { ...getApiHeaders(token), 'Content-Type': 'application/json' },
         body: JSON.stringify(newChild),
       });
 

@@ -77,35 +77,24 @@ ENABLE_EMAIL_CONFIRMATION=false
 ./infra/scripts/docker-manage.sh start
 ```
 
-This starts:
-- PostgreSQL database (port 5432)
-- FastAPI backend (port 8000)
+This starts PostgreSQL (port 5432) and FastAPI backend (port 8000).
 
-#### Create admin, parent, and student (after migrations)
+#### Run database migrations and setup
 
-From project root run:
+From project root, use the script that runs with the project’s `backend/requirements.txt` (creates `.venv` if needed):
 
 ```bash
-./infra/scripts/setup-test-users.sh
+./infra/scripts/run.sh db setup
 ```
 
-The script uses **backend/requirements.txt** (creates `.venv` and installs from it if needed), then creates the three users in Supabase Auth and `campus_circle_auth.users`. Ensure `.env` has your Supabase DB host (e.g. `SUPABASE_DB_HOST=db.xxxx.supabase.co`).
+This applies migrations **001→005** (schema, seed, tenant registry, Demo-BHIS tenant, super_admins) and creates **demo users** (Demo-Circle + Demo-BHIS) and the **super admin** account. One command for a full demo-ready DB.
 
-**Credentials (also on Help page):** demo_admin@campuscircle.com | demo_parent@campuscircle.com | demo_student@campuscircle.com (password: password123)
+- **Supabase:** Set `.env` with `SUPABASE_DB_HOST=db.xxxx.supabase.co` (and other DB vars).
+- **Local Docker:** Use `SUPABASE_DB_HOST=localhost` (or `db` if running from inside Docker), then run the command above. Alternatively: `./infra/scripts/docker-manage.sh migrate` then `./infra/scripts/run.sh db setup`.
 
-#### Run Database Migrations
+**Demo credentials (see Help page):** demo_admin@campuscircle.com, demo_parent@campuscircle.com, demo_student@campuscircle.com; bhis_admin@campuscircle.com, etc. (password: password123). Super admin: superadmin@campuscircle.com (set `SUPER_ADMIN_PASSWORD` in `.env` or use default).
 
-**Supabase or any Postgres** (using `.env`; no SQL editor needed):
-```bash
-python infra/scripts/db.py migrate
-```
-
-**Local Docker:**
-```bash
-./infra/scripts/docker-manage.sh migrate
-```
-
-This applies SQL files from `database/` when present (001_schema.sql, 002_seed.sql — schema including children-under-14 design, and sample data).
+For step-by-step or other commands (migrate only, one tenant, backup), see [infra/scripts/README.md](infra/scripts/README.md).
 
 #### Disable Email Confirmation (Development)
 
@@ -222,7 +211,7 @@ curl http://localhost:8000/api/events
 ### Create Backup
 
 ```bash
-python infra/scripts/db.py backup
+./infra/scripts/run.sh db backup
 ```
 
 Backups are stored in `database/backup/` and include:
@@ -233,7 +222,7 @@ Backups are stored in `database/backup/` and include:
 ### Restore from Backup
 
 ```bash
-python infra/scripts/db.py restore <path-to-backup.sql>
+./infra/scripts/run.sh db restore <path-to-backup.sql>
 ```
 
 **Warning**: This will drop and recreate the schemas. Make sure you have a backup before restoring.
@@ -253,7 +242,8 @@ campus-circle/
 │   └── scripts/      # db.py, docker-manage.sh, setup-test-users, sanity-test
 └── docs/
     ├── ARCHITECTURE.md
-    └── DATABASE.md
+    ├── DATABASE.md
+    └── TENANTS_AND_DEPLOYMENT.md
 ```
 
 ## 🏗️ Architecture
@@ -271,6 +261,7 @@ For detailed architecture information, see [docs/ARCHITECTURE.md](docs/ARCHITECT
 
 - [Architecture Documentation](docs/ARCHITECTURE.md) - System architecture and design
 - [Database Schema](docs/DATABASE.md) - Database structure and schema details
+- [Tenants and Deployment](docs/TENANTS_AND_DEPLOYMENT.md) - Tenant model (Demo-Circle, baseline, new tenants), deployment (Firebase and free hosting)
 - [Scripts Documentation](infra/scripts/README.md) - Scripts for DB, Docker, setup
 - [CHANGELOG.md](CHANGELOG.md) - Version history and changes
 
@@ -313,16 +304,18 @@ Code changes **do not apply** until the running services are restarted or rebuil
 - **Database (for new columns, e.g. cancellation cutoff)**  
   Run migrations after pulling or changing schema:
   ```bash
-  python infra/scripts/db.py migrate
+  ./infra/scripts/run.sh db migrate
   ```
   With Docker: `./infra/scripts/docker-manage.sh migrate`
 
 ## 🗄️ Database Schema
 
-The application uses two isolated schemas:
+The application is **tenant-ready**. The default tenant is **Demo-Circle** (internal, with demo data). Its data lives in two schemas:
 
 - **`campus_circle`**: Application data (users, events, schools, etc.)
 - **`campus_circle_auth`**: Isolated authentication (for portability)
+
+A **tenant registry** (`public.tenants`) lists all tenants; new client tenants get their own schemas (e.g. `tenant_<slug>`) with the same structure. See [docs/TENANTS_AND_DEPLOYMENT.md](docs/TENANTS_AND_DEPLOYMENT.md).
 
 For detailed database documentation, see [docs/DATABASE.md](docs/DATABASE.md).
 

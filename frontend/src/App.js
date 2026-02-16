@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
+import { getApiUrl, getApiHeaders } from './api/client';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import LoginPage from './features/auth/components/LoginPage';
@@ -21,6 +22,7 @@ import ManageUsers from './features/admin/components/ManageUsers';
 import ManageEvents from './features/admin/components/ManageEvents';
 import ManageSchools from './features/admin/components/ManageSchools';
 import ContactSubmissions from './features/admin/components/ContactSubmissions';
+import ManageTenants from './features/admin/components/ManageTenants';
 import { fetchEvents } from './features/events/eventsSlice';
 import { setCredentials, logout } from './features/auth/authSlice';
 import { fetchProfile } from './features/dashboard/dashboardSlice';
@@ -33,7 +35,7 @@ const ProtectedRoute = ({ children }) => {
 
 function HomePage() {
   const dispatch = useDispatch();
-  const { events, loading } = useSelector((state) => state.events);
+  const { events, loading: eventsLoading } = useSelector((state) => state.events);
   const { token, user } = useSelector((state) => state.auth);
   const { profile } = useSelector((state) => state.dashboard);
   const isAdmin = user?.role === 'admin' || profile?.role === 'admin';
@@ -45,10 +47,10 @@ function HomePage() {
   }, [token, profile, dispatch]);
 
   useEffect(() => {
-    if (events.length === 0) {
+    if (events.length === 0 && !eventsLoading) {
       dispatch(fetchEvents());
     }
-  }, [dispatch, events.length]);
+  }, [dispatch, events.length, eventsLoading]);
 
   // Only use real events from API, no mock events
   const currentEvents = events;
@@ -69,7 +71,7 @@ function HomePage() {
       <div className="mb-12">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-3xl font-bold text-gray-900">
-            {loading ? 'Loading Events...' : currentEvents.length > 0 ? 'Current & Upcoming Events' : 'No Events Scheduled'}
+            {eventsLoading ? 'Loading Events...' : currentEvents.length > 0 ? 'Current & Upcoming Events' : 'No Events Scheduled'}
           </h2>
           {currentEvents.length > 0 && (
             <Link
@@ -81,7 +83,7 @@ function HomePage() {
           )}
         </div>
 
-        {loading ? (
+        {eventsLoading ? (
           <div className="text-center py-12">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
             <p className="mt-4 text-gray-600">Loading events...</p>
@@ -191,14 +193,12 @@ function App() {
   const dispatch = useDispatch();
   const { token } = useSelector((state) => state.auth);
 
-  // Validate stored token on load: if we have token but no user, verify with API; clear token if invalid
+  // Validate stored token on load only when we have token but no user (e.g. page refresh)
   const { user } = useSelector((state) => state.auth);
   useEffect(() => {
-    if (!token) return;
-    const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-    const base = API_BASE_URL.endsWith('/api') ? API_BASE_URL : `${API_BASE_URL}/api`;
-    fetch(`${base}/users/me`, {
-      headers: { 'Authorization': `Bearer ${token}` },
+    if (!token || user) return;
+    fetch(getApiUrl('/users/me'), {
+      headers: getApiHeaders(token),
     })
       .then((response) => {
         if (response.ok) return response.json();
@@ -219,7 +219,7 @@ function App() {
         }
       })
       .catch(() => dispatch(logout()));
-  }, [dispatch, token]);
+  }, [dispatch, token, user]);
 
   return (
     <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
@@ -313,6 +313,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <ContactSubmissions />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/tenants"
+            element={
+              <ProtectedRoute>
+                <ManageTenants />
               </ProtectedRoute>
             }
           />

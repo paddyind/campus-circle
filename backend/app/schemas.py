@@ -89,6 +89,7 @@ class UserProfile(UserBase):
     dob: Optional[date] = None
     school_id: Optional[str] = None
     class_id: Optional[str] = None
+    is_super_admin: Optional[bool] = False
 
     class Config:
         from_attributes = True

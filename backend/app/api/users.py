@@ -3,6 +3,7 @@ from typing import Optional
 from app.schemas import ParentCreate, StudentCreate, UserLogin, UserProfile, Event, EventRegistration, ProfileUpdate, ContactSubmission, ContactSubmissionResponse, ChildCreate, ChildUpdate, EventRegistrationRequest
 from app.core.supabase import supabase
 from app.core.database import execute_query_one, execute_query
+from app.core.tenant_resolution import is_super_admin
 from app.auth.dependencies import get_current_user
 
 router = APIRouter()
@@ -222,93 +223,70 @@ async def login(credentials: UserLogin):
         )
         
         if not user_check:
-            # User authenticated but not registered in Campus Circle - auto-link for development
-            # In production, you might want to require explicit registration
-            try:
-                # The foreign key in campus_circle.users points to auth.users (local database)
-                # First, ensure user exists in local auth.users (for FK constraint)
+            # Super admins can log in without being in any tenant's users table — skip auto-link
+            if is_super_admin(auth_response.user.id):
+                user_check = True
+            else:
+                # User authenticated but not registered in Campus Circle - auto-link for development
+                # campus_circle.users.id FK references campus_circle_auth.users(id), so sync mirror first
                 try:
-                    execute_query(
-                        "INSERT INTO auth.users (id, email, email_confirmed_at, created_at, updated_at) VALUES (%s, %s, NOW(), NOW(), NOW()) ON CONFLICT (id) DO UPDATE SET email_confirmed_at = NOW()",
-                        (auth_response.user.id, credentials.email)
+                    _sync_auth_user_to_campus_circle_auth(auth_response.user.id, credentials.email)
+                    user_metadata = getattr(auth_response.user, 'user_metadata', {}) or {}
+                    existing_role_row = execute_query_one(
+                        "SELECT role FROM campus_circle.users WHERE id = %s",
+                        (auth_response.user.id,)
                     )
-                except Exception:
-                    # If auth.users doesn't exist, try campus_circle_auth.users
-                    try:
+                    if existing_role_row:
+                        role = existing_role_row['role']
+                    else:
+                        role = user_metadata.get('role', 'student')
+                    existing_role_row = execute_query_one(
+                        "SELECT role FROM campus_circle.users WHERE id = %s",
+                        (auth_response.user.id,)
+                    )
+                    if existing_role_row and existing_role_row.get('role'):
+                        role = existing_role_row['role']
                         execute_query(
-                            "INSERT INTO campus_circle_auth.users (id, email, email_confirmed_at) VALUES (%s, %s, NOW()) ON CONFLICT (id) DO UPDATE SET email_confirmed_at = NOW()",
-                            (auth_response.user.id, credentials.email)
+                            "INSERT INTO campus_circle.users (id, role) VALUES (%s, %s) ON CONFLICT (id) DO UPDATE SET role = campus_circle.users.role",
+                            (auth_response.user.id, role)
                         )
-                    except Exception:
-                        pass  # May not exist, continue anyway
-                
-                # Try to auto-link by checking if user has a role in metadata or create a default
-                user_metadata = getattr(auth_response.user, 'user_metadata', {}) or {}
-                # Check if user already has a role in database first
-                existing_role_row = execute_query_one(
-                    "SELECT role FROM campus_circle.users WHERE id = %s",
-                    (auth_response.user.id,)
-                )
-                if existing_role_row:
-                    role = existing_role_row['role']  # Preserve existing role
-                else:
-                    role = user_metadata.get('role', 'student')  # Default to student if no metadata
-                
-                # Insert into campus_circle.users (FK points to auth.users)
-                # Use ON CONFLICT DO UPDATE to update role if user already exists
-                # Check if user already has a role - if so, preserve it unless metadata says otherwise
-                existing_role_row = execute_query_one(
-                    "SELECT role FROM campus_circle.users WHERE id = %s",
-                    (auth_response.user.id,)
-                )
-                if existing_role_row and existing_role_row.get('role'):
-                    # User already has a role in database - preserve it
-                    role = existing_role_row['role']
-                    execute_query(
-                        "INSERT INTO campus_circle.users (id, role) VALUES (%s, %s) ON CONFLICT (id) DO UPDATE SET role = campus_circle.users.role",
-                        (auth_response.user.id, role)
+                    else:
+                        execute_query(
+                            "INSERT INTO campus_circle.users (id, role) VALUES (%s, %s) ON CONFLICT (id) DO UPDATE SET role = EXCLUDED.role",
+                            (auth_response.user.id, role)
+                        )
+                    if role == 'parent':
+                        execute_query(
+                            """INSERT INTO campus_circle.parents (id, email, full_name, phone) 
+                               VALUES (%s, %s, %s, %s) ON CONFLICT (id) DO NOTHING""",
+                            (auth_response.user.id, credentials.email, user_metadata.get('full_name', 'User'), '')
+                        )
+                    elif role == 'student':
+                        execute_query(
+                            """INSERT INTO campus_circle.students (id, full_name, status) 
+                               VALUES (%s, %s, 'active') ON CONFLICT (id) DO NOTHING""",
+                            (auth_response.user.id, user_metadata.get('full_name', 'User'))
+                        )
+                    user_check = execute_query_one(
+                        "SELECT * FROM campus_circle.users WHERE id = %s",
+                        (auth_response.user.id,)
                     )
-                else:
-                    # New user or no role - use metadata or default
-                    execute_query(
-                        "INSERT INTO campus_circle.users (id, role) VALUES (%s, %s) ON CONFLICT (id) DO UPDATE SET role = EXCLUDED.role",
-                        (auth_response.user.id, role)
-                    )
-                
-                # If role is parent, try to add to parents table
-                if role == 'parent':
-                    execute_query(
-                        """INSERT INTO campus_circle.parents (id, email, full_name, phone) 
-                           VALUES (%s, %s, %s, %s) ON CONFLICT (id) DO NOTHING""",
-                        (auth_response.user.id, credentials.email, user_metadata.get('full_name', 'User'), '')
-                    )
-                elif role == 'student':
-                    execute_query(
-                        """INSERT INTO campus_circle.students (id, full_name, status) 
-                           VALUES (%s, %s, 'active') ON CONFLICT (id) DO NOTHING""",
-                        (auth_response.user.id, user_metadata.get('full_name', 'User'))
-                    )
-                
-                # Re-check
-                user_check = execute_query_one(
-                    "SELECT * FROM campus_circle.users WHERE id = %s",
-                    (auth_response.user.id,)
-                )
-                print(f"Auto-linked user {credentials.email} to campus_circle schema with role {role}.")
-            except Exception as link_error:
-                # Log the error for debugging
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.error(f"Auto-linking error: {str(link_error)}")
-                print(f"Auto-linking failed: {str(link_error)}")
-                # Continue to error below
-        
+                    print(f"Auto-linked user {credentials.email} to campus_circle schema with role {role}.")
+                except Exception as link_error:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.error(f"Auto-linking error: {str(link_error)}")
+                    print(f"Auto-linking failed: {str(link_error)}")
+
         if not user_check:
-            # User authenticated but not registered in Campus Circle
-            raise HTTPException(
-                status_code=403, 
-                detail="Please register for Campus Circle first. Your account exists but is not linked to this application."
-            )
+            # Super admins (in public.super_admins) can log in without being in any tenant's users table
+            if is_super_admin(auth_response.user.id):
+                user_check = True
+            else:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Please register for Campus Circle first. Your account exists but is not linked to this application."
+                )
 
         return {
             "access_token": auth_response.session.access_token,
@@ -426,19 +404,34 @@ async def register_student(user_data: StudentCreate):
 
 @router.get("/me", response_model=UserProfile)
 async def get_my_profile(current_user: dict = Depends(get_current_user)):
-    # Get user ID from JWT token (sub is the standard claim for user ID)
+    from app.core.tenant_resolution import is_super_admin
+
     user_id = current_user.get("sub") or current_user.get("id")
     if not user_id:
         raise HTTPException(status_code=401, detail="User ID not found in token")
-    
+
     try:
-        # First, get the user's role from the campus_circle.users table using direct PostgreSQL query
+        # Super admin: no row in current tenant needed; only they can switch tenants
+        if is_super_admin(user_id):
+            email = current_user.get("email") or ""
+            name = (current_user.get("user_metadata") or {}).get("full_name") or "Super Admin"
+            return {
+                "id": user_id,
+                "email": email,
+                "full_name": name,
+                "phone": "",
+                "role": "admin",
+                "dob": None,
+                "is_super_admin": True,
+            }
+
+        # First, get the user's role from the current tenant's users table
         user_row = execute_query_one(
             "SELECT role FROM campus_circle.users WHERE id = %s",
             (user_id,)
         )
         if not user_row:
-            raise HTTPException(status_code=404, detail="User not found in campus_circle schema")
+            raise HTTPException(status_code=404, detail="User not found in current tenant")
 
         role = user_row['role']
 
@@ -491,12 +484,11 @@ async def get_my_profile(current_user: dict = Depends(get_current_user)):
         if not profile_row:
             raise HTTPException(status_code=404, detail="Profile not found")
 
-        # Add email and role to the response
+        # Add email, role, and is_super_admin to the response (tenant admins are not super admins)
         profile_dict = dict(profile_row)
         profile_dict['role'] = role
-        # Get email from JWT token (current_user) or from profile table
         profile_dict['email'] = current_user.get('email') or profile_dict.get('email') or ''
-        
+        profile_dict['is_super_admin'] = False
         return profile_dict
     except HTTPException:
         raise
@@ -506,11 +498,18 @@ async def get_my_profile(current_user: dict = Depends(get_current_user)):
 @router.put("/me", response_model=UserProfile)
 async def update_my_profile(profile_update: ProfileUpdate, current_user: dict = Depends(get_current_user)):
     """Update the current user's profile"""
+    from app.core.tenant_resolution import is_super_admin
+
     user_id = current_user.get("sub") or current_user.get("id")
     if not user_id:
         raise HTTPException(status_code=401, detail="User ID not found in token")
 
     try:
+        if is_super_admin(user_id):
+            email = current_user.get("email") or ""
+            name = (current_user.get("user_metadata") or {}).get("full_name") or "Super Admin"
+            return {"id": user_id, "email": email, "full_name": name, "phone": "", "role": "admin", "dob": None, "is_super_admin": True}
+
         # Get user's role
         user_row = execute_query_one(
             "SELECT role FROM campus_circle.users WHERE id = %s",

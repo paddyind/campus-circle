@@ -1,5 +1,5 @@
 -- Campus Circle: Full schema (consolidated)
--- Run with .env via: python infra/scripts/db.py migrate
+-- Run with .env via: ./infra/scripts/run.sh db migrate
 -- Only schemas used: campus_circle_auth, campus_circle (no other app schemas)
 
 DROP SCHEMA IF EXISTS "campus-circle" CASCADE;

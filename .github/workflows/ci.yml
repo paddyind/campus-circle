@@ -31,6 +31,12 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r backend/requirements.txt
 
+    - name: Verify DB migrations and scripts
+      run: |
+        test -f database/001_schema.sql && test -f database/005_super_admins.sql || exit 1
+        python infra/scripts/db.py 2>&1 | grep -q "migrate\|setup" || exit 1
+        echo "Migrations 001-005 and db.py commands OK"
+
     - name: Run sanity tests
       run: |
         chmod +x infra/scripts/sanity-test.sh

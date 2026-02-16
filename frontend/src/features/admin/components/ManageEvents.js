@@ -1,12 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-const getApiUrl = (endpoint) => {
-  const base = API_BASE_URL.endsWith('/api') ? API_BASE_URL : `${API_BASE_URL}/api`;
-  return `${base}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
-};
+import { getApiUrl, getApiHeaders } from '../../../api/client';
 
 const emptyEventForm = () => ({
   title: '',
@@ -56,7 +51,7 @@ const ManageEvents = () => {
   const fetchSchools = async () => {
     try {
       const response = await fetch(getApiUrl('/events/schools/'), {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        headers: getApiHeaders(token),
       });
       if (response.ok) {
         const data = await response.json();
@@ -72,9 +67,7 @@ const ManageEvents = () => {
       setLoading(true);
       setError(null);
       const response = await fetch(getApiUrl('/events/'), {
-        headers: token ? {
-          'Authorization': `Bearer ${token}`,
-        } : {},
+        headers: getApiHeaders(token),
       });
 
       if (!response.ok) {
@@ -107,7 +100,7 @@ const ManageEvents = () => {
       const offset = (page - 1) * regPagination.limit;
       const response = await fetch(getApiUrl(`/events/${eventId}/registrations?limit=${regPagination.limit}&offset=${offset}`), {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          ...getApiHeaders(token),
         }
       });
 
@@ -140,7 +133,7 @@ const ManageEvents = () => {
     try {
       const response = await fetch(getApiUrl(`/events/${eventId}`), {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` },
+        headers: getApiHeaders(token),
       });
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
@@ -254,7 +247,7 @@ const ManageEvents = () => {
       const response = await fetch(getApiUrl('/events/'), {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          ...getApiHeaders(token),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(buildEventPayload()),
@@ -284,7 +277,7 @@ const ManageEvents = () => {
       const response = await fetch(getApiUrl(`/events/${editingEventId}`), {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          ...getApiHeaders(token),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(buildEventPayload()),

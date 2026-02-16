@@ -1,11 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-const getApiUrl = (endpoint) => {
-  const base = API_BASE_URL.endsWith('/api') ? API_BASE_URL : `${API_BASE_URL}/api`;
-  return `${base}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
-};
+import { getApiUrl, getApiHeaders } from '../../../api/client';
 
 const ManageSchools = () => {
   const { token } = useSelector((state) => state.auth);
@@ -23,7 +18,7 @@ const ManageSchools = () => {
       setLoading(true);
       setError(null);
       const response = await fetch(getApiUrl('/events/schools/'), {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        headers: getApiHeaders(token),
       });
       if (!response.ok) throw new Error('Failed to fetch schools');
       const data = await response.json();
@@ -50,7 +45,7 @@ const ManageSchools = () => {
     setFormError(null);
     try {
       const response = await fetch(getApiUrl(`/events/schools/${id}`), {
-        headers: { 'Authorization': `Bearer ${token}` },
+        headers: getApiHeaders(token),
       });
       if (!response.ok) throw new Error('Failed to load school');
       const data = await response.json();
@@ -114,7 +109,7 @@ const ManageSchools = () => {
     try {
       const response = await fetch(getApiUrl(`/events/schools/${id}`), {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` },
+        headers: getApiHeaders(token),
       });
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
@@ -149,38 +144,48 @@ const ManageSchools = () => {
           <p className="mt-4 text-gray-600">Loading schools...</p>
         </div>
       ) : (
-        <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  Name
+                </th>
+                <th scope="col" className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {schools.length === 0 ? (
                 <tr>
-                  <td colSpan={2} className="px-4 py-8 text-center text-gray-500">No schools yet. Add one to use as event venue.</td>
+                  <td colSpan={2} className="px-6 py-12 text-center text-gray-500">
+                    No schools yet. Add one to use as event venue.
+                  </td>
                 </tr>
               ) : (
                 schools.map((s) => (
-                  <tr key={s.id}>
-                    <td className="px-4 py-3 text-gray-900">{s.name}</td>
-                    <td className="px-4 py-3">
-                      <button
-                        type="button"
-                        onClick={() => openEdit(s.id)}
-                        className="text-indigo-600 hover:text-indigo-800 font-medium mr-4"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(s.id, s.name)}
-                        className="text-red-600 hover:text-red-800 font-medium"
-                      >
-                        Delete
-                      </button>
+                  <tr key={s.id} className="hover:bg-gray-50/50 transition-colors">
+                    <td className="px-6 py-4 text-sm font-medium text-gray-900 align-middle">
+                      {s.name}
+                    </td>
+                    <td className="px-6 py-4 text-right align-middle">
+                      <span className="inline-flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openEdit(s.id)}
+                          className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(s.id, s.name)}
+                          className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          Delete
+                        </button>
+                      </span>
                     </td>
                   </tr>
                 ))

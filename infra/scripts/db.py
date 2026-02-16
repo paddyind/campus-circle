@@ -4,10 +4,11 @@ Campus Circle database: run migrations and manage DB using .env credentials.
 Use this to apply schema/seed to Supabase or local Postgres without opening SQL editor.
 
 Usage:
-  python infra/scripts/db.py migrate   # Run 001, 002 (idempotent)
-  python infra/scripts/db.py reset    # Drop schemas, then run 001, 002 (fresh DB)
-  python infra/scripts/db.py backup   # Dump to database/backup/
-  python infra/scripts/db.py restore <path>  # Execute SQL file (e.g. backup)
+  ./infra/scripts/run.sh db migrate   # Run 001–005 (idempotent). run.sh uses .venv + backend/requirements.txt.
+  ./infra/scripts/run.sh db setup     # Migrate + create demo users (Demo-Circle, Demo-BHIS) + super admin (one-time/fresh install).
+  ./infra/scripts/run.sh db reset     # Drop app schemas, then run 001–005 (fresh DB).
+  ./infra/scripts/run.sh db backup    # Dump to database/backup/
+  ./infra/scripts/run.sh db restore <path>   # Execute SQL file (e.g. backup)
 """
 
 import os
@@ -57,7 +58,7 @@ def run_sql_file(conn, filepath):
             raise
 
 def run_migrations(conn, paths_only=False):
-    order = ["001_schema.sql", "002_seed.sql"]
+    order = ["001_schema.sql", "002_seed.sql", "003_tenant_registry.sql", "004_demo_bhis_tenant.sql", "005_super_admins.sql"]
     for name in order:
         path = DATABASE_DIR / name
         if not path.exists():
@@ -75,9 +76,16 @@ def _require_psycopg2():
         import psycopg2
         return psycopg2
     except ImportError:
-        print("Install deps from project root: pip install -r backend/requirements.txt")
-        print("Or use project venv: python3 -m venv .venv && .venv/bin/pip install -r backend/requirements.txt")
-        print("Then run: ./infra/scripts/migrate.sh  or  .venv/bin/python3 infra/scripts/db.py migrate")
+        venv_py = PROJECT_ROOT / ".venv" / "bin" / "python3"
+        if venv_py.exists():
+            print("psycopg2 not found. Re-running with project venv...")
+            os.chdir(PROJECT_ROOT)
+            os.execv(venv_py, [str(venv_py)] + sys.argv)
+        print("psycopg2 not found. Install it using a project venv:")
+        print("  python3 -m venv .venv")
+        print("  .venv/bin/pip install -r backend/requirements.txt")
+        print("Then run:  ./infra/scripts/run.sh db migrate")
+        print("Or from project root:  ./infra/scripts/migrate.sh")
         sys.exit(1)
 
 def migrate():
@@ -100,11 +108,13 @@ def reset():
     conn = psycopg2.connect(**p)
     try:
         conn.autocommit = True
-        print("Dropping app schemas (campus_circle, campus_circle_auth, and any legacy campus-circle)...")
+        print("Dropping app schemas (campus_circle, campus_bhis, and auth)...")
         with conn.cursor() as cur:
             cur.execute('DROP SCHEMA IF EXISTS "campus-circle" CASCADE;')
             cur.execute("DROP SCHEMA IF EXISTS campus_circle CASCADE;")
             cur.execute("DROP SCHEMA IF EXISTS campus_circle_auth CASCADE;")
+            cur.execute("DROP SCHEMA IF EXISTS campus_bhis CASCADE;")
+            cur.execute("DROP SCHEMA IF EXISTS campus_bhis_auth CASCADE;")
         conn.autocommit = False
         run_migrations(conn)
     finally:
@@ -130,7 +140,7 @@ def backup():
 
 def restore(path_arg):
     if not path_arg or not os.path.isfile(path_arg):
-        print("Usage: python infra/scripts/db.py restore <path-to-backup.sql>")
+        print("Usage: ./infra/scripts/run.sh db restore <path-to-backup.sql>")
         sys.exit(1)
     p = get_conn_params()
     env = os.environ.copy()
@@ -145,6 +155,18 @@ def restore(path_arg):
         sys.exit(1)
     print("Restore done.")
 
+def setup():
+    """Run migrate, then create demo users (Demo-Circle + Demo-BHIS) and super admin."""
+    migrate()
+    py = sys.executable
+    scripts_dir = PROJECT_ROOT / "infra" / "scripts"
+    r1 = subprocess.run([py, str(scripts_dir / "setup_test_users.py")], cwd=PROJECT_ROOT)
+    r2 = subprocess.run([py, str(scripts_dir / "setup_super_admin.py")], cwd=PROJECT_ROOT)
+    if r1.returncode != 0 or r2.returncode != 0:
+        sys.exit(1)
+    print("Setup done. See docs/TENANTS_AND_DEPLOYMENT.md for login credentials.")
+
+
 def main():
     if len(sys.argv) < 2:
         print(__doc__)
@@ -152,6 +174,8 @@ def main():
     cmd = sys.argv[1].lower()
     if cmd == "migrate":
         migrate()
+    elif cmd == "setup":
+        setup()
     elif cmd == "reset":
         reset()
     elif cmd == "backup":
@@ -159,7 +183,7 @@ def main():
     elif cmd == "restore":
         restore(sys.argv[2] if len(sys.argv) > 2 else None)
     else:
-        print("Commands: migrate | reset | backup | restore <path>")
+        print("Commands: migrate | setup | reset | backup | restore <path>")
         sys.exit(1)
 
 if __name__ == "__main__":

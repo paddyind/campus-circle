@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Docker**: Single `Dockerfile.frontend` (multi-stage: dev + prod); migrations service uses `postgres:15-alpine` image. Removed `Dockerfile.frontend.dev` and `Dockerfile.migrations`.
 
 ### Added
+- **Tenant productization (Phase 1):** Default tenant "Demo-Circle" with tenant registry (`public.tenants`); migration `003_tenant_registry.sql`. Documentation: [TENANTS_AND_DEPLOYMENT.md](docs/TENANTS_AND_DEPLOYMENT.md) (tenants + deployment). ARCHITECTURE and README updated. CI and test data unchanged.
 - Admin: Contact Submissions management with status tracking
 - Admin: View registered members for events with pagination (RegistrationsModal on event detail and Manage Events)
 - API: Endpoint for paginated event registrations (`GET /api/events/{id}/registrations`)

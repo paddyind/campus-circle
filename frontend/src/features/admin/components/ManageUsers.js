@@ -1,11 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-const getApiUrl = (endpoint) => {
-  const base = API_BASE_URL.endsWith('/api') ? API_BASE_URL : `${API_BASE_URL}/api`;
-  return `${base}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
-};
+import { getApiUrl, getApiHeaders } from '../../../api/client';
 
 const ManageUsers = () => {
   const { token, user } = useSelector((state) => state.auth);
@@ -22,9 +18,7 @@ const ManageUsers = () => {
     } else if (token) {
       // Fetch profile if email is not in user object
       fetch(getApiUrl('/users/me'), {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: getApiHeaders(token),
       })
         .then(res => res.json())
         .then(profile => {
@@ -42,7 +36,7 @@ const ManageUsers = () => {
       setError(null);
       const response = await fetch(getApiUrl('/admin/users'), {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          ...getApiHeaders(token),
         },
       });
 
@@ -72,7 +66,7 @@ const ManageUsers = () => {
       const response = await fetch(getApiUrl(`/admin/users/${userId}/role?new_role=${newRole}`), {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          ...getApiHeaders(token),
           'Content-Type': 'application/json',
         },
       });
@@ -103,7 +97,7 @@ const ManageUsers = () => {
       const response = await fetch(getApiUrl(`/admin/users/${userId}`), {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          ...getApiHeaders(token),
         },
       });
 

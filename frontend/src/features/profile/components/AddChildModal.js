@@ -1,10 +1,5 @@
 import React, { useState, useEffect } from 'react';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-const getApiUrl = (endpoint) => {
-  const base = API_BASE_URL.endsWith('/api') ? API_BASE_URL : `${API_BASE_URL}/api`;
-  return `${base}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
-};
+import { getApiUrl, getApiHeaders } from '../../../api/client';
 
 const AddChildModal = ({ isOpen, onClose, onSuccess }) => {
   const [newChild, setNewChild] = useState({
@@ -25,9 +20,7 @@ const AddChildModal = ({ isOpen, onClose, onSuccess }) => {
         try {
           const token = localStorage.getItem('token');
           const response = await fetch(getApiUrl('/users/me'), {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
+            headers: getApiHeaders(token),
           });
           if (response.ok) {
             const profile = await response.json();
@@ -70,10 +63,7 @@ const AddChildModal = ({ isOpen, onClose, onSuccess }) => {
       const token = localStorage.getItem('token');
       const response = await fetch(getApiUrl('/users/me/children'), {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { ...getApiHeaders(token), 'Content-Type': 'application/json' },
         body: JSON.stringify(newChild),
       });
 

@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
 import { fetchEvents, registerForEvent } from '../eventsSlice';
-import { fetchMyEvents, fetchProfile } from '../../dashboard/dashboardSlice';
+import { fetchMyEvents } from '../../dashboard/dashboardSlice';
 
 const CurrentEventsPage = () => {
   const dispatch = useDispatch();
@@ -12,14 +12,15 @@ const CurrentEventsPage = () => {
   const isAdmin = user?.role === 'admin' || profile?.role === 'admin';
 
   useEffect(() => {
-    dispatch(fetchEvents());
-  }, [dispatch]);
+    if (events.length === 0) {
+      dispatch(fetchEvents());
+    }
+  }, [dispatch, events.length]);
 
   useEffect(() => {
     if (!token) return;
-    if (!profile) dispatch(fetchProfile());
     dispatch(fetchMyEvents());
-  }, [dispatch, token]); // Intentionally omit profile to avoid double fetch when profile loads
+  }, [dispatch, token]);
 
   const handleRegister = (eventId) => {
     const isParent = user?.role === 'parent' || profile?.role === 'parent';

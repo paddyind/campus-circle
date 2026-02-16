@@ -99,13 +99,13 @@ Schema and seed data live in the **`database/`** directory. The structure is in 
 
 ```bash
 # Apply or update schema and seed (idempotent)
-python infra/scripts/db.py migrate
+./infra/scripts/run.sh db migrate
 ```
 
 **Fresh database** (drop and recreate schemas, then apply 001 and 002):
 
 ```bash
-python infra/scripts/db.py reset
+./infra/scripts/run.sh db reset
 ```
 
 **Docker** (local DB only):
@@ -167,10 +167,10 @@ Backups and optional initial/demo data live in **`database/backup/`**. Use the d
 
 ```bash
 # Create a backup (writes to database/backup/backup_YYYYMMDD_HHMMSS.sql)
-python infra/scripts/db.py backup
+./infra/scripts/run.sh db backup
 
 # Restore from a backup file
-python infra/scripts/db.py restore database/backup/backup_20240101_120000.sql
+./infra/scripts/run.sh db restore database/backup/backup_20240101_120000.sql
 ```
 
 Backup requires `pg_dump`; restore requires `psql`. Backups include `campus_circle` and `campus_circle_auth` schemas and data.
@@ -265,4 +265,4 @@ SUPABASE_DB_PASSWORD=your_password
 - Indexes are created for frequently queried columns
 - The `campus_circle` schema keeps the application data isolated from other projects
 - The `campus_circle_auth` schema provides isolated authentication for portability
-- Use `python infra/scripts/db.py migrate` to apply migrations to Supabase or local Postgres without opening the SQL editor
+- Use `./infra/scripts/run.sh db migrate` to apply migrations to Supabase or local Postgres without opening the SQL editor

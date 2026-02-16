@@ -1,38 +1,40 @@
 from fastapi import Depends, HTTPException
 from app.auth.dependencies import get_current_user
 from app.core.database import execute_query_one
+from app.core.tenant_resolution import is_super_admin, is_demo_circle_admin
 
 def RoleChecker(allowed_roles: list[str]):
     async def get_current_user_role(user: dict = Depends(get_current_user)):
         import logging
         logger = logging.getLogger(__name__)
-        
-        # Get user ID from JWT token
+
         user_id = user.get("sub") or user.get("id")
         if not user_id:
             logger.error(f"RoleChecker: User ID not found in token. User dict: {user}")
             raise HTTPException(status_code=401, detail="User ID not found in token")
-        
-        logger.info(f"RoleChecker: Checking role for user_id: {user_id}")
-        
+
         try:
-            # Fetch role from database
+            # Super admins have admin in every tenant (no per-tenant row needed)
+            if "admin" in allowed_roles and is_super_admin(user_id):
+                return user
+            # Demo-Circle (parent) admins can perform admin actions in any tenant
+            if "admin" in allowed_roles and is_demo_circle_admin(user_id):
+                return user
+
+            # Else check role in current tenant's schema
             user_row = execute_query_one(
                 "SELECT role FROM campus_circle.users WHERE id = %s",
                 (user_id,)
             )
-            
+
             if not user_row:
-                logger.error(f"RoleChecker: User {user_id} not found in database")
+                logger.error(f"RoleChecker: User {user_id} not found in current tenant")
                 raise HTTPException(status_code=403, detail="User not found in database")
-            
-            user_role = user_row.get('role')
+
+            user_role = user_row.get("role")
             if not user_role:
-                logger.error(f"RoleChecker: User {user_id} has no role in database")
                 raise HTTPException(status_code=403, detail="User role not found in database")
 
-            logger.info(f"RoleChecker: User {user_id} has role: {user_role}, checking against: {allowed_roles}")
-            
             if user_role not in allowed_roles:
                 raise HTTPException(status_code=403, detail=f"User with role '{user_role}' is not authorized. Required roles: {', '.join(allowed_roles)}")
 

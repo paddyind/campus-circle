@@ -2,11 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-const getApiUrl = (endpoint) => {
-  const base = API_BASE_URL.endsWith('/api') ? API_BASE_URL : `${API_BASE_URL}/api`;
-  return `${base}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
-};
+import { getApiUrl, getApiHeaders } from '../../../api/client';
 
 const ContactSubmissions = () => {
   const { token, user } = useSelector((state) => state.auth);
@@ -35,7 +31,7 @@ const ContactSubmissions = () => {
       const offset = (pagination.page - 1) * pagination.limit;
       const response = await fetch(getApiUrl(`/admin/contact-submissions?limit=${pagination.limit}&offset=${offset}`), {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          ...getApiHeaders(token),
         }
       });
 
@@ -64,7 +60,7 @@ const ContactSubmissions = () => {
       const response = await fetch(getApiUrl(`/admin/contact-submissions/${id}/status`), {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          ...getApiHeaders(token),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ status: newStatus }) // Backend expects query param but let's check admin.py
@@ -79,7 +75,7 @@ const ContactSubmissions = () => {
       const response2 = await fetch(url, {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          ...getApiHeaders(token),
         }
       });
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { getApiUrl, getApiHeaders } from '../../../api/client';
 import { fetchProfile } from '../../dashboard/dashboardSlice';
 
 const EditProfileModal = ({ isOpen, onClose, profile }) => {
@@ -31,20 +32,14 @@ const EditProfileModal = ({ isOpen, onClose, profile }) => {
     setSuccess(false);
 
     try {
-      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-      const base = API_BASE_URL.endsWith('/api') ? API_BASE_URL : `${API_BASE_URL}/api`;
-      
       const updateData = {};
       if (formData.full_name) updateData.full_name = formData.full_name;
       if (formData.phone !== undefined) updateData.phone = formData.phone;
       if (formData.dob) updateData.dob = formData.dob;
 
-      const response = await fetch(`${base}/users/me`, {
+      const response = await fetch(getApiUrl('/users/me'), {
         method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { ...getApiHeaders(token), 'Content-Type': 'application/json' },
         body: JSON.stringify(updateData),
       });
 

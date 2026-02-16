@@ -1,9 +1,16 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
+import { getApiUrl, getApiHeaders, getTenantSlug } from '../../../api/client';
 import { fetchProfile } from '../../dashboard/dashboardSlice';
 import EditProfileModal from './EditProfileModal';
 import AddChildModal from './AddChildModal';
+
+const tenantDisplayName = (slug) => {
+  if (slug === 'demo-circle') return 'Demo-Circle';
+  if (slug === 'demo-bhis') return 'Demo-BHIS';
+  return slug || '—';
+};
 
 const ProfilePage = () => {
   const dispatch = useDispatch();
@@ -26,26 +33,17 @@ const ProfilePage = () => {
     
     setLoadingRelations(true);
     try {
-      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-      const base = API_BASE_URL.endsWith('/api') ? API_BASE_URL : `${API_BASE_URL}/api`;
-      
       if (user?.role === 'parent') {
-        // Fetch children for parent
-        const response = await fetch(`${base}/users/me/children`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
+        const response = await fetch(getApiUrl('/users/me/children'), {
+          headers: getApiHeaders(token),
         });
         if (response.ok) {
           const data = await response.json();
           setChildren(data || []);
         }
       } else if (user?.role === 'student') {
-        // Fetch parent for student
-        const response = await fetch(`${base}/users/me/parent`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
+        const response = await fetch(getApiUrl('/users/me/parent'), {
+          headers: getApiHeaders(token),
         });
         if (response.ok) {
           const data = await response.json();
@@ -123,6 +121,11 @@ const ProfilePage = () => {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
               <p className="text-gray-900 capitalize">{profile?.role || user?.role || 'N/A'}</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Current tenant</label>
+              <p className="text-gray-900">{tenantDisplayName(getTenantSlug())}</p>
+              <p className="text-xs text-gray-500 mt-1">Switch tenant in the navbar to change context.</p>
             </div>
           </div>
           <div className="mt-6">

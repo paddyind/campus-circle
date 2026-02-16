@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Body
 from app.schemas import UserProfile
-from app.core.database import execute_query, execute_query_one
+from app.core.database import execute_query, execute_query_one, execute_query_public, execute_query_one_public
 from app.auth.dependencies import get_current_user
 from app.auth.roles import RoleChecker
+from app.core.tenant_resolution import get_all_tenants, get_allowed_tenant_slugs
 import logging
 
 logger = logging.getLogger(__name__)
@@ -197,40 +198,61 @@ async def update_submission_status(
         logger.error(f"Error updating submission status: {e}")
         raise HTTPException(status_code=500, detail=f"Error updating status: {str(e)[:100]}")
 
-@router.put("/contact-submissions/{submission_id}/status")
-async def update_submission_status(
-    submission_id: str,
-    status: str,
-    admin_notes: str = None,
+# ----- Tenant administration (Demo-Circle parent admin can navigate and update any tenant) -----
+
+@router.get("/tenants", response_model=list[dict])
+async def admin_list_tenants(
     current_user: dict = Depends(get_current_user),
-    _: None = Depends(RoleChecker(["admin", "event_organizer"]))
+    _: None = Depends(RoleChecker(["admin"])),
 ):
-    """Update contact submission status (admin/organizer only)"""
-    try:
-        valid_statuses = ['new', 'in_progress', 'resolved', 'closed']
-        if status not in valid_statuses:
-            raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}")
+    """List all tenants (parent admin only). For switcher and tenant settings navigation."""
+    user_id = current_user.get("sub") or current_user.get("id")
+    allowed = get_allowed_tenant_slugs(user_id)
+    tenants = get_all_tenants()
+    return [dict(t) for t in tenants if t["slug"] in allowed]
 
-        update_fields = ["status = %s", "updated_at = NOW()"]
-        update_values = [status]
 
-        if admin_notes:
-            update_fields.append("admin_notes = %s")
-            update_values.append(admin_notes)
+@router.get("/tenants/{slug}/settings", response_model=dict)
+async def get_tenant_settings(
+    slug: str,
+    current_user: dict = Depends(get_current_user),
+    _: None = Depends(RoleChecker(["admin"])),
+):
+    """Get settings for a tenant (parent admin). Slug e.g. demo-circle, demo-bhis."""
+    user_id = current_user.get("sub") or current_user.get("id")
+    allowed = get_allowed_tenant_slugs(user_id)
+    if slug not in allowed:
+        raise HTTPException(status_code=403, detail="Access denied to this tenant")
+    row = execute_query_one_public(
+        "SELECT id, name, slug, settings, updated_at FROM public.tenants WHERE slug = %s",
+        (slug.strip().lower(),),
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    return dict(row)
 
-        if status == 'resolved':
-            update_fields.append("resolved_at = NOW()")
 
-        update_values.append(submission_id)
-
-        execute_query(
-            f"UPDATE campus_circle.contact_submissions SET {', '.join(update_fields)} WHERE id = %s",
-            tuple(update_values)
-        )
-
-        return {"message": f"Submission status updated to {status}", "submission_id": submission_id}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error updating submission status: {e}")
-        raise HTTPException(status_code=500, detail=f"Error updating status: {str(e)[:100]}")
+@router.put("/tenants/{slug}/settings", response_model=dict)
+async def update_tenant_settings(
+    slug: str,
+    settings: dict = Body(...),
+    current_user: dict = Depends(get_current_user),
+    _: None = Depends(RoleChecker(["admin"])),
+):
+    """Update settings for a tenant (parent admin). Pass JSON body: { \"key\": value }."""
+    user_id = current_user.get("sub") or current_user.get("id")
+    allowed = get_allowed_tenant_slugs(user_id)
+    if slug not in allowed:
+        raise HTTPException(status_code=403, detail="Access denied to this tenant")
+    slug_lower = slug.strip().lower()
+    execute_query_public(
+        "UPDATE public.tenants SET settings = settings || %s::jsonb, updated_at = now() WHERE slug = %s",
+        (settings, slug_lower),
+    )
+    row = execute_query_one_public(
+        "SELECT id, name, slug, settings, updated_at FROM public.tenants WHERE slug = %s",
+        (slug_lower,),
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    return dict(row)

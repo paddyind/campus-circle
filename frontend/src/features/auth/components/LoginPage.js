@@ -8,15 +8,21 @@ const LoginPage = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const dispatch = useDispatch();
-  const { status, error, isAuthenticated } = useSelector((state) => state.auth);
+  const { status, error, isAuthenticated, user } = useSelector((state) => state.auth);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     dispatch(loginUser({ email, password }));
   };
 
+  if (isAuthenticated && user?.role) {
+    if (user.role === 'admin') return <Navigate to="/dashboard/admin" replace />;
+    if (user.role === 'parent') return <Navigate to="/dashboard/parent" replace />;
+    if (user.role === 'student') return <Navigate to="/dashboard/student" replace />;
+    return <Navigate to="/" replace />;
+  }
   if (isAuthenticated) {
-    return <Navigate to="/" />;
+    return <Navigate to="/" replace />;
   }
 
   return (

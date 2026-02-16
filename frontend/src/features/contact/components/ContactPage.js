@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
+import { getApiUrl, getApiHeaders } from '../../../api/client';
 import { fetchEvents } from '../../events/eventsSlice';
-import { useDispatch } from 'react-redux';
 
 const ContactPage = () => {
   const dispatch = useDispatch();
@@ -25,8 +25,10 @@ const ContactPage = () => {
       navigate('/login');
       return;
     }
-    dispatch(fetchEvents());
-  }, [token, navigate, dispatch]);
+    if (events.length === 0) {
+      dispatch(fetchEvents());
+    }
+  }, [token, navigate, dispatch, events.length]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -35,9 +37,6 @@ const ContactPage = () => {
     setSuccess(false);
 
     try {
-      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-      const base = API_BASE_URL.endsWith('/api') ? API_BASE_URL : `${API_BASE_URL}/api`;
-      
       const submitData = {
         submission_type: formData.submission_type,
         subject: formData.subject,
@@ -46,12 +45,9 @@ const ContactPage = () => {
         related_organizer_id: formData.related_organizer_id || null
       };
 
-      const response = await fetch(`${base}/users/contact`, {
+      const response = await fetch(getApiUrl('/users/contact'), {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { ...getApiHeaders(token), 'Content-Type': 'application/json' },
         body: JSON.stringify(submitData),
       });
 

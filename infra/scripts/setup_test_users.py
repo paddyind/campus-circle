@@ -2,7 +2,7 @@
 """
 Create admin, parent, and student users in Supabase Auth and mirror into
 campus_circle_auth.users and campus_circle. Run from project root; loads .env.
-Usage: python3 infra/scripts/setup_test_users.py
+Usage: ./infra/scripts/run.sh setup_test_users
 """
 import os
 import sys
@@ -84,7 +84,7 @@ def db_execute(query, params=None):
         conn.close()
 
 
-def create_user(email, password, full_name, role, user_type, phone=None, dob=None):
+def create_user(email, password, full_name, role, user_type, phone=None, dob=None, schema_auth="campus_circle_auth", schema_app="campus_circle"):
     admin_url = f"{SUPABASE_URL}/auth/v1/admin/users"
     headers = {
         "apikey": SUPABASE_SERVICE_ROLE_KEY,
@@ -92,9 +92,8 @@ def create_user(email, password, full_name, role, user_type, phone=None, dob=Non
         "Content-Type": "application/json",
     }
 
-    print(f"\n📝 Creating {user_type}: {email}...")
+    print(f"\n📝 Creating {user_type}: {email} ({schema_app})...")
 
-    # Get or create in Supabase Auth (list returns all users; find by email)
     r = requests.get(admin_url, headers=headers, timeout=10)
     if r.status_code != 200:
         print(f"   ❌ Auth API error: {r.status_code} {r.text[:150]}")
@@ -107,7 +106,6 @@ def create_user(email, password, full_name, role, user_type, phone=None, dob=Non
 
     if auth_user_id:
         print(f"   ⚠️  User exists in auth.users: {auth_user_id}")
-        # Ensure confirmed
         requests.put(
             f"{admin_url}/{auth_user_id}",
             headers=headers,
@@ -133,43 +131,40 @@ def create_user(email, password, full_name, role, user_type, phone=None, dob=Non
         auth_user_id = r2.json().get("id")
         print(f"   ✅ Created in auth.users: {auth_user_id}")
 
-    # Mirror into campus_circle_auth.users (so they appear in your schema)
     try:
         db_execute(
-            """INSERT INTO campus_circle_auth.users (id, email, email_confirmed_at)
+            f"""INSERT INTO {schema_auth}.users (id, email, email_confirmed_at)
                VALUES (%s, %s, NOW())
                ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, email_confirmed_at = EXCLUDED.email_confirmed_at""",
             (auth_user_id, email),
         )
-        print(f"   ✅ Synced to campus_circle_auth.users")
+        print(f"   ✅ Synced to {schema_auth}.users")
     except Exception as e:
-        print(f"   ❌ campus_circle_auth.users: {e}")
+        print(f"   ❌ {schema_auth}.users: {e}")
         return False
 
-    # campus_circle.users
     db_execute(
-        "INSERT INTO campus_circle.users (id, role) VALUES (%s, %s) ON CONFLICT (id) DO UPDATE SET role = EXCLUDED.role",
+        f"INSERT INTO {schema_app}.users (id, role) VALUES (%s, %s) ON CONFLICT (id) DO UPDATE SET role = EXCLUDED.role",
         (auth_user_id, role),
     )
-    print(f"   ✅ campus_circle.users (role={role})")
+    print(f"   ✅ {schema_app}.users (role={role})")
 
-    # Profile table
     if user_type in ("admin", "parent"):
         db_execute(
-            """INSERT INTO campus_circle.parents (id, email, full_name, phone)
+            f"""INSERT INTO {schema_app}.parents (id, email, full_name, phone)
                VALUES (%s, %s, %s, %s)
                ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, full_name = EXCLUDED.full_name, phone = EXCLUDED.phone""",
             (auth_user_id, email, full_name, phone or "N/A"),
         )
-        print(f"   ✅ campus_circle.parents")
+        print(f"   ✅ {schema_app}.parents")
     elif user_type == "student":
         db_execute(
-            """INSERT INTO campus_circle.students (id, auth_user_id, full_name, dob, status)
+            f"""INSERT INTO {schema_app}.students (id, auth_user_id, full_name, dob, status)
                VALUES (%s, %s, %s, %s, 'active')
                ON CONFLICT (id) DO UPDATE SET auth_user_id = EXCLUDED.auth_user_id, full_name = EXCLUDED.full_name, dob = EXCLUDED.dob""",
             (auth_user_id, auth_user_id, full_name, dob),
         )
-        print(f"   ✅ campus_circle.students")
+        print(f"   ✅ {schema_app}.students")
 
     return True
 
@@ -179,24 +174,38 @@ def main():
     parent_email = os.environ.get("TEST_PARENT_EMAIL", "demo_parent@campuscircle.com")
     student_email = os.environ.get("TEST_STUDENT_EMAIL", "demo_student@campuscircle.com")
 
-    users = [
+    demo_users = [
         {"email": admin_email, "password": "password123", "full_name": "Admin User", "role": "admin", "user_type": "admin", "phone": "N/A"},
         {"email": parent_email, "password": "password123", "full_name": "John Doe", "role": "parent", "user_type": "parent", "phone": "123-456-7890"},
         {"email": student_email, "password": "password123", "full_name": "Jane Doe", "role": "student", "user_type": "student", "dob": "2010-05-15"},
     ]
 
+    bhis_users = [
+        {"email": "bhis_admin@campuscircle.com", "password": "password123", "full_name": "BHIS Admin", "role": "admin", "user_type": "admin", "phone": "N/A"},
+        {"email": "bhis_parent@campuscircle.com", "password": "password123", "full_name": "BHIS Parent", "role": "parent", "user_type": "parent", "phone": "555-1111"},
+        {"email": "bhis_student@campuscircle.com", "password": "password123", "full_name": "BHIS Student", "role": "student", "user_type": "student", "dob": "2011-03-10"},
+    ]
+
     print(f"DB: {DB_HOST}:{DB_PORT}/{DB_NAME}")
-    # Verify we can reach the DB before creating users
     try:
-        rows = db_execute("SELECT 1 FROM campus_circle_auth.users LIMIT 0")
+        db_execute("SELECT 1 FROM campus_circle_auth.users LIMIT 0")
         print("   (DB connection OK)")
     except Exception as e:
         print(f"   ❌ Cannot connect to DB: {e}")
         sys.exit(1)
-    print(f"Creating: {admin_email}, {parent_email}, {student_email}")
+
+    # Demo-BHIS requires migration 004 (campus_bhis_auth schema)
+    bhis_schema_ok = False
+    try:
+        db_execute("SELECT 1 FROM campus_bhis_auth.users LIMIT 0")
+        bhis_schema_ok = True
+        print("   (Demo-BHIS schema campus_bhis_auth present)")
+    except Exception:
+        print("   ⚠️  campus_bhis_auth not found. Run migrations first: ./infra/scripts/run.sh db migrate")
+        print("   Creating Demo-Circle users only; skipping Demo-BHIS.")
 
     failed = []
-    for u in users:
+    for u in demo_users:
         try:
             if not create_user(**u):
                 failed.append(u["email"])
@@ -204,17 +213,28 @@ def main():
             print(f"   ❌ {e}")
             failed.append(u["email"])
 
+    if bhis_schema_ok:
+        for u in bhis_users:
+            try:
+                if not create_user(schema_auth="campus_bhis_auth", schema_app="campus_bhis", **u):
+                    failed.append(u["email"])
+            except Exception as e:
+                print(f"   ❌ {e}")
+                failed.append(u["email"])
+
     if failed:
         print(f"\n❌ Failed: {', '.join(failed)}")
         sys.exit(1)
-    # Verify rows in campus_circle_auth.users
     try:
-        count = db_execute("SELECT COUNT(*) AS n FROM campus_circle_auth.users")
-        n = count[0]["n"] if count else 0
-        print(f"\n✅ Done. campus_circle_auth.users now has {n} row(s).")
+        c1 = db_execute("SELECT COUNT(*) AS n FROM campus_circle_auth.users")
+        c2 = db_execute("SELECT COUNT(*) AS n FROM campus_bhis_auth.users")
+        n1 = c1[0]["n"] if c1 else 0
+        n2 = c2[0]["n"] if c2 else 0
+        print(f"\n✅ Done. Demo-Circle: {n1} auth users; Demo-BHIS: {n2} auth users.")
     except Exception:
         pass
-    print(f"Login: {admin_email} | {parent_email} | {student_email} (password123)")
+    print("Login (Demo-Circle): demo_admin@campuscircle.com | demo_parent@campuscircle.com | demo_student@campuscircle.com")
+    print("Login (Demo-BHIS):  bhis_admin@campuscircle.com | bhis_parent@campuscircle.com | bhis_student@campuscircle.com (password123)")
 
 
 if __name__ == "__main__":

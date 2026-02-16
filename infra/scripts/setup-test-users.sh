@@ -63,7 +63,7 @@ fi
 
 echo ""
 echo -e "${YELLOW}Using .env → ${SUPABASE_DB_HOST}${NC}"
-echo -e "${YELLOW}Run migrations first if needed: python infra/scripts/db.py migrate${NC}"
+echo -e "${YELLOW}Run migrations first if needed: ./infra/scripts/run.sh db migrate${NC}"
 echo ""
 
 cd "$PROJECT_ROOT"
@@ -85,8 +85,9 @@ EXIT_CODE=$?
 
 if [ $EXIT_CODE -eq 0 ]; then
     echo ""
-    echo -e "${GREEN}✅ Admin, parent, and student created in auth.users and campus_circle_auth.users.${NC}"
-    echo "   Login: demo_admin@campuscircle.com | demo_parent@campuscircle.com | demo_student@campuscircle.com (password123)"
+    echo -e "${GREEN}✅ Demo-Circle and Demo-BHIS users created in auth and tenant schemas.${NC}"
+    echo "   Demo-Circle: demo_admin@campuscircle.com | demo_parent@campuscircle.com | demo_student@campuscircle.com"
+    echo "   Demo-BHIS:   bhis_admin@campuscircle.com | bhis_parent@campuscircle.com | bhis_student@campuscircle.com (password123)"
 else
     echo ""
     echo -e "${RED}❌ Setup failed.${NC}"

@@ -1,19 +1,12 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { fetchMyEvents } from '../dashboard/dashboardSlice';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-
-// Helper to build API URL (handles both with and without /api in base URL)
-const getApiUrl = (endpoint) => {
-  const base = API_BASE_URL.endsWith('/api') ? API_BASE_URL : `${API_BASE_URL}/api`;
-  return `${base}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
-};
+import { getApiUrl, getApiHeaders } from '../../api/client';
 
 export const fetchEvents = createAsyncThunk(
   'events/fetchEvents',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await fetch(getApiUrl('/events/'));
+      const response = await fetch(getApiUrl('/events/'), { headers: getApiHeaders() });
       if (!response.ok) {
         throw new Error('Failed to fetch events');
       }
@@ -29,7 +22,7 @@ export const fetchEventById = createAsyncThunk(
   'events/fetchEventById',
   async (eventId, { rejectWithValue }) => {
     try {
-      const response = await fetch(getApiUrl(`/events/${eventId}`));
+      const response = await fetch(getApiUrl(`/events/${eventId}`), { headers: getApiHeaders() });
       if (!response.ok) {
         throw new Error('Event not found');
       }
@@ -59,10 +52,7 @@ export const registerForEvent = createAsyncThunk(
 
       const response = await fetch(getApiUrl(`/users/events/${eventId}/register`), {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { ...getApiHeaders(token), 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
 
@@ -99,9 +89,7 @@ export const fetchEventRegistrations = createAsyncThunk(
       }
 
       const response = await fetch(getApiUrl(`/events/${eventId}/registrations?limit=${limit}&offset=${offset}`), {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: getApiHeaders(token),
       });
 
       if (!response.ok) {
@@ -126,10 +114,7 @@ export const cancelRegistration = createAsyncThunk(
       const body = studentId ? JSON.stringify({ student_id: studentId }) : undefined;
       const response = await fetch(getApiUrl(`/users/events/${eventId}/register`), {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          ...(body && { 'Content-Type': 'application/json' }),
-        },
+        headers: { ...getApiHeaders(token), ...(body && { 'Content-Type': 'application/json' }) },
         ...(body && { body }),
       });
       if (!response.ok) {

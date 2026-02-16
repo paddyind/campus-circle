@@ -116,6 +116,13 @@ test_migrations() {
             log_success "Found $sql_count SQL file(s) in database/"
             if [ -f "$database_dir/001_schema.sql" ] && [ -f "$database_dir/002_seed.sql" ]; then
                 log_success "Expected schema/seed files (001, 002) present"
+                for m in 003_tenant_registry.sql 004_demo_bhis_tenant.sql 005_super_admins.sql; do
+                    if [ -f "$database_dir/$m" ]; then
+                        log_success "Migration $m present"
+                    else
+                        log_error "Migration $m missing"
+                    fi
+                done
             else
                 log_error "When using SQL files, expect 001_schema.sql and 002_seed.sql in database/"
             fi
@@ -276,6 +283,7 @@ test_documentation() {
         "CHANGELOG.md"
         "docs/DATABASE.md"
         "docs/ARCHITECTURE.md"
+        "docs/TENANTS_AND_DEPLOYMENT.md"
     )
     
     for file in "${doc_files[@]}"; do
@@ -292,8 +300,8 @@ test_scripts() {
     
     local script_files=(
         "infra/scripts/docker-manage.sh"
-        "infra/scripts/setup-test-users.sh"
         "infra/scripts/db.py"
+        "infra/scripts/setup-test-users.sh"
         "infra/scripts/sanity-test.sh"
     )
     
@@ -367,9 +375,9 @@ main() {
         echo -e "${GREEN}╚═══════════════════════════════════════════════════════════════╝${NC}"
         echo ""
         log_info "Next steps:"
-        echo "  1. Deploy to Docker: ./infra/scripts/docker-manage.sh dev"
-        echo "  2. Run migrations: python infra/scripts/db.py migrate  (or ./infra/scripts/docker-manage.sh migrate)"
-        echo "  3. Setup test users: ./infra/scripts/setup-test-users.sh"
+        echo "  1. Run DB: ./infra/scripts/run.sh db migrate   # then ./infra/scripts/run.sh db setup (demo users + super admin)"
+        echo "  2. Or one-shot: ./infra/scripts/run.sh db setup # migrate + demo users + super admin"
+        echo "  3. Deploy: ./infra/scripts/docker-manage.sh build && ./infra/scripts/docker-manage.sh dev"
         echo ""
         exit 0
     else
