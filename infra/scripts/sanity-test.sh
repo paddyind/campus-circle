@@ -16,6 +16,17 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
+# Docker Compose: prefer 'docker compose' (v2) if available, else 'docker-compose' (v1)
+run_docker_compose() {
+    if docker compose version &> /dev/null; then
+        docker compose "$@"
+    elif command -v docker-compose &> /dev/null; then
+        docker-compose "$@"
+    else
+        return 1
+    fi
+}
+
 # Test counters
 TESTS_RUN=0
 TESTS_PASSED=0
@@ -97,8 +108,10 @@ test_docker() {
         log_error "Docker is not installed"
     fi
     
-    if command -v docker-compose &> /dev/null; then
-        log_success "Docker Compose is installed"
+    if docker compose version &> /dev/null; then
+        log_success "Docker Compose is installed (docker compose v2)"
+    elif command -v docker-compose &> /dev/null; then
+        log_success "Docker Compose is installed (docker-compose v1)"
     else
         log_error "Docker Compose is not installed"
     fi
@@ -254,8 +267,8 @@ test_docker_compose() {
     if [ -f "$compose_file" ]; then
         log_success "Docker Compose file exists"
         
-        # Validate compose file
-        if docker-compose -f "$compose_file" config > /dev/null 2>&1; then
+        # Validate compose file (from PROJECT_ROOT so .env is found; use docker compose v2 or v1)
+        if (cd "$PROJECT_ROOT" && run_docker_compose -f "infra/docker-compose.yml" config) > /dev/null 2>&1; then
             log_success "Docker Compose configuration is valid"
         else
             log_error "Docker Compose configuration is invalid"
