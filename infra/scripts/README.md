@@ -38,6 +38,7 @@ This runs **migrate** (001→005) then **demo users** (Demo-Circle + Demo-BHIS) 
 | **Demo users (both tenants)** | `./infra/scripts/setup-test-users.sh` | Or `./infra/scripts/run.sh setup_test_users` |
 | **One tenant’s users** | `./infra/scripts/run.sh setup_tenant_users demo-bhis` | After 004 for that tenant |
 | **Super admin only** | `./infra/scripts/run.sh setup_super_admin` | After 005; env: `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_PASSWORD` |
+| **Verify before push (CI-like)** | `./infra/scripts/ci-verify.sh` | Sanity tests + docker compose config. Add `--build` to also build images. |
 | **Docker run (demo/MVP)** | `./infra/scripts/docker-manage.sh run` | Stop all, then start backend + db + frontend dev server. Open http://localhost:3000. Use this for prototype and demo. |
 | **Docker dev** | `./infra/scripts/docker-manage.sh dev` | Start backend + DB + frontend dev server (http://localhost:3000). |
 | **Docker prod** | `./infra/scripts/docker-manage.sh prod` | Start backend + db + frontend (Nginx; requires existing `frontend/build`). |

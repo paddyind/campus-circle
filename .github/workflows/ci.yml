@@ -63,7 +63,14 @@ jobs:
         cd frontend
         npm test -- --watchAll=false
 
-    - name: Build production images
-      working-directory: ${{ github.workspace }}
+    - name: Verify workspace for Docker build
       run: |
+        echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
+        ls -la "$GITHUB_WORKSPACE"
+        test -d "$GITHUB_WORKSPACE/infra" || (echo "ERROR: infra directory missing"; exit 1)
+        ls -la "$GITHUB_WORKSPACE/infra"
+
+    - name: Build production images
+      run: |
+        cd "$GITHUB_WORKSPACE"
         docker compose -f infra/docker-compose.yml --project-directory . build
