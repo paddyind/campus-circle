@@ -8,7 +8,10 @@ EXPOSE 3000
 CMD ["sh", "-c", "npm run build:tailwind && npm start"]
 
 # Production: build then serve with Nginx
+# Build with: docker build -f infra/Dockerfile.frontend --build-arg REACT_APP_API_URL=https://your-api.example.com/api -t campus-circle-frontend .
 FROM node:18-alpine AS build
+ARG REACT_APP_API_URL
+ENV REACT_APP_API_URL=$REACT_APP_API_URL
 WORKDIR /app
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm install

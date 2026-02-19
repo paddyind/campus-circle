@@ -1,16 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
+import { useParams, Link, useLocation } from 'react-router-dom';
 import { getApiUrl, getApiHeaders } from '../../../api/client';
 import { fetchEventById, registerForEvent, cancelRegistration } from '../eventsSlice';
-import { fetchMyEvents, fetchProfile } from '../../dashboard/dashboardSlice';
+import { fetchMyEvents } from '../../dashboard/dashboardSlice';
 import ChildSelectionModal from './ChildSelectionModal';
 import RegistrationsModal from './RegistrationsModal';
 
 const EventDetailPage = () => {
   const { id } = useParams();
   const location = useLocation();
-  const navigate = useNavigate();
   const dispatch = useDispatch();
   const { currentEvent, registeredEvents, loading, error } = useSelector((state) => state.events);
   const { token, user } = useSelector((state) => state.auth);
@@ -29,14 +28,15 @@ const EventDetailPage = () => {
   const backLink = fromManageEvents ? '/admin/events' : '/events';
 
   useEffect(() => {
+    if (!id) return;
+    if (currentEvent?.id === id) return;
     dispatch(fetchEventById(id));
-  }, [dispatch, id]);
+  }, [dispatch, id, currentEvent?.id]);
 
   useEffect(() => {
     if (!token) return;
     dispatch(fetchMyEvents());
-    if (!profile) dispatch(fetchProfile());
-  }, [dispatch, token]); // Omit profile to avoid refetch when profile loads
+  }, [dispatch, token]);
 
   useEffect(() => {
     if (!token || !id || !registeredEvents?.includes(id)) {

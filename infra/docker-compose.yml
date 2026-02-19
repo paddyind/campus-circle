@@ -3,7 +3,9 @@
 name: campus-circle
 
 services:
+  # Prod: serves frontend/build and proxies /api to backend (container named frontend for clarity)
   nginx:
+    container_name: campus-circle-frontend
     image: nginx:stable-alpine
     ports:
       - "80:80"
@@ -15,7 +17,9 @@ services:
     profiles:
       - nginx
 
+  # Dev: React dev server (port 3000)
   frontend:
+    container_name: campus-circle-frontend-dev
     build:
       context: ..
       dockerfile: infra/Dockerfile.frontend
@@ -35,6 +39,7 @@ services:
       - dev
 
   backend:
+    container_name: campus-circle-backend
     build:
       context: ..
       dockerfile: infra/Dockerfile.backend
@@ -50,7 +55,9 @@ services:
     volumes:
       - ../backend:/app
 
+  # Migrations run against SUPABASE_DB_HOST (Supabase or local db). No dependency on local db.
   migrations:
+    container_name: campus-circle-migrations
     image: postgres:15-alpine
     environment:
       - SUPABASE_DB_HOST=${SUPABASE_DB_HOST}
@@ -60,36 +67,37 @@ services:
       - SUPABASE_DB_PASSWORD=${SUPABASE_DB_PASSWORD}
     command: >
       sh -c "
-        echo 'Waiting for database...' &&
-        while ! pg_isready -h $$SUPABASE_DB_HOST -p $$SUPABASE_DB_PORT -U $$SUPABASE_DB_USER; do
+        echo 'Waiting for database at $$SUPABASE_DB_HOST...' &&
+        while ! pg_isready -h $$SUPABASE_DB_HOST -p $$SUPABASE_DB_PORT -U $$SUPABASE_DB_USER 2>/dev/null; do
           sleep 2;
         done;
         echo 'Database is ready!';
-        for f in /migrations/*.sql; do PGPASSWORD=$$SUPABASE_DB_PASSWORD psql -v ON_ERROR_STOP=1 --host $$SUPABASE_DB_HOST --port $$SUPABASE_DB_PORT --username $$SUPABASE_DB_USER --dbname $$SUPABASE_DB_NAME -f $$f; done
+        for f in /migrations/*.sql; do PGPASSWORD=$$SUPABASE_DB_PASSWORD psql -v ON_ERROR_STOP=1 -h $$SUPABASE_DB_HOST -p $$SUPABASE_DB_PORT -U $$SUPABASE_DB_USER -d $$SUPABASE_DB_NAME -f $$f; done
       "
     volumes:
       - ../database:/migrations
-    depends_on:
-      db:
-        condition: service_healthy
     profiles:
       - migrations
 
+  # Local Postgres only when you want a DB on your machine. Omit this profile for Supabase-only.
   db:
+    container_name: campus-circle-db
     image: postgres:15-alpine
     ports:
       - "5432:5432"
     environment:
       - POSTGRES_PASSWORD=${SUPABASE_DB_PASSWORD}
-      - POSTGRES_USER=${SUPABASE_DB_USER}
-      - POSTGRES_DB=${SUPABASE_DB_NAME}
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=${SUPABASE_DB_NAME:-postgres}
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${SUPABASE_DB_USER} -d ${SUPABASE_DB_NAME}"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d $${POSTGRES_DB:-postgres}"]
       interval: 5s
       timeout: 5s
       retries: 5
+    profiles:
+      - local-db
 
 volumes:
   db_data:

@@ -1,28 +1,61 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { fetchMyEvents } from '../dashboard/dashboardSlice';
-import { getApiUrl, getApiHeaders } from '../../api/client';
+import { logout, setCurrentTenant } from '../auth/authSlice';
+import { getApiUrl, getApiHeaders, getTenantSlug } from '../../api/client';
+
+const EVENTS_STALE_MS = 2 * 60 * 1000; // 2 minutes
+let eventsFetchInFlight = false;
 
 export const fetchEvents = createAsyncThunk(
   'events/fetchEvents',
-  async (_, { rejectWithValue }) => {
+  async (_, { getState, dispatch, rejectWithValue }) => {
+    const state = getState();
+    const { events, lastFetchedAt, lastFetchedTenant } = state.events || {};
+    const token = state.auth?.token;
+    const currentTenant = getTenantSlug();
+    // Dedupe: only guard concurrent in-flight request (do NOT check loading: pending is dispatched before this runs, so loading is always true here)
+    if (eventsFetchInFlight) return { list: events || [], tenant: currentTenant, skipUpdate: true };
+    // Use cache only if same tenant and not stale; skip reducer update to avoid re-render loops
+    const cacheValid = Array.isArray(events) && events.length >= 0 && lastFetchedTenant === currentTenant &&
+      lastFetchedAt && Date.now() - lastFetchedAt < EVENTS_STALE_MS;
+    if (cacheValid) return { list: events, tenant: currentTenant, skipUpdate: true };
+    eventsFetchInFlight = true;
+    const EVENTS_FETCH_TIMEOUT_MS = 15000;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), EVENTS_FETCH_TIMEOUT_MS);
     try {
-      const response = await fetch(getApiUrl('/events/'), { headers: getApiHeaders() });
+      const response = await fetch(getApiUrl('/events/'), {
+        headers: getApiHeaders(token),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (response.status === 401) {
+        dispatch(logout());
+        return rejectWithValue('Session expired. Please log in again.');
+      }
       if (!response.ok) {
         throw new Error('Failed to fetch events');
       }
       const data = await response.json();
-      return data || [];
+      return { list: data || [], tenant: currentTenant };
     } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        return rejectWithValue('Request timed out. The server may be slow or unavailable.');
+      }
       return rejectWithValue(error.message || 'Failed to load events');
+    } finally {
+      eventsFetchInFlight = false;
     }
   }
 );
 
 export const fetchEventById = createAsyncThunk(
   'events/fetchEventById',
-  async (eventId, { rejectWithValue }) => {
+  async (eventId, { getState, rejectWithValue }) => {
+    const token = getState().auth?.token;
     try {
-      const response = await fetch(getApiUrl(`/events/${eventId}`), { headers: getApiHeaders() });
+      const response = await fetch(getApiUrl(`/events/${eventId}`), { headers: getApiHeaders(token) });
       if (!response.ok) {
         throw new Error('Event not found');
       }
@@ -130,6 +163,8 @@ export const cancelRegistration = createAsyncThunk(
 
 const initialState = {
   events: [],
+  lastFetchedAt: null,
+  lastFetchedTenant: null,
   currentEvent: null,
   registeredEvents: [],
   currentEventRegistrations: {
@@ -149,6 +184,13 @@ const eventsSlice = createSlice({
     addEvent: (state, action) => {
       state.events.push(action.payload);
     },
+    /** Clear events cache when tenant changes so next fetch uses new tenant */
+    clearEventsCache: (state) => {
+      state.events = [];
+      state.lastFetchedAt = null;
+      state.lastFetchedTenant = null;
+      state.currentEvent = null;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -157,8 +199,13 @@ const eventsSlice = createSlice({
         state.error = null;
       })
       .addCase(fetchEvents.fulfilled, (state, action) => {
+        const payload = action.payload;
+        if (payload?.skipUpdate) return; // dedupe/cache return: do not touch state (avoids infinite dispatch loop)
         state.loading = false;
-        state.events = action.payload || [];
+        const list = payload?.list ?? (Array.isArray(payload) ? payload : []);
+        state.events = list;
+        state.lastFetchedAt = Date.now();
+        state.lastFetchedTenant = payload?.tenant ?? getTenantSlug();
       })
       .addCase(fetchEvents.rejected, (state, action) => {
         state.loading = false;
@@ -213,10 +260,22 @@ const eventsSlice = createSlice({
       })
       .addCase(cancelRegistration.rejected, (state, action) => {
         state.error = action.payload;
+      })
+      .addCase(logout, (state) => {
+        state.events = [];
+        state.lastFetchedAt = null;
+        state.lastFetchedTenant = null;
+        state.currentEvent = null;
+      })
+      .addCase(setCurrentTenant, (state) => {
+        state.events = [];
+        state.lastFetchedAt = null;
+        state.lastFetchedTenant = null;
+        state.currentEvent = null;
       });
   },
 });
 
-export const { addEvent } = eventsSlice.actions;
+export const { addEvent, clearEventsCache } = eventsSlice.actions;
 
 export default eventsSlice.reducer;

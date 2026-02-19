@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 
 import { getApiUrl, getApiHeaders } from '../../../api/client';
 
 const ContactSubmissions = () => {
-  const { token, user } = useSelector((state) => state.auth);
+  const { token } = useSelector((state) => state.auth);
   const navigate = useNavigate();
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -16,15 +16,7 @@ const ContactSubmissions = () => {
     total: 0
   });
 
-  useEffect(() => {
-    if (!token) {
-      navigate('/login');
-      return;
-    }
-    fetchSubmissions();
-  }, [token, pagination.page]);
-
-  const fetchSubmissions = async () => {
+  const fetchSubmissions = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -53,36 +45,26 @@ const ContactSubmissions = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token, pagination.page, pagination.limit]);
+
+  useEffect(() => {
+    if (!token) {
+      navigate('/login');
+      return;
+    }
+    fetchSubmissions();
+  }, [token, navigate, pagination.page, fetchSubmissions]);
 
   const updateStatus = async (id, newStatus) => {
     try {
-      const response = await fetch(getApiUrl(`/admin/contact-submissions/${id}/status`), {
-        method: 'PUT',
-        headers: {
-          ...getApiHeaders(token),
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ status: newStatus }) // Backend expects query param but let's check admin.py
-      });
-      // Wait, backend admin.py uses query param for status?
-      // @router.put("/contact-submissions/{submission_id}/status")
-      // async def update_submission_status(submission_id: str, status: str, ...)
-      // So it expects ?status=...
-
-      // Let's correct the fetch call
       const url = getApiUrl(`/admin/contact-submissions/${id}/status?status=${newStatus}`);
-      const response2 = await fetch(url, {
+      const res = await fetch(url, {
         method: 'PUT',
-        headers: {
-          ...getApiHeaders(token),
-        }
+        headers: getApiHeaders(token),
       });
-
-      if (!response2.ok) {
+      if (!res.ok) {
         throw new Error('Failed to update status');
       }
-
       fetchSubmissions();
     } catch (err) {
       alert('Error updating status: ' + err.message);

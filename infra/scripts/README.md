@@ -38,7 +38,10 @@ This runs **migrate** (001→005) then **demo users** (Demo-Circle + Demo-BHIS) 
 | **Demo users (both tenants)** | `./infra/scripts/setup-test-users.sh` | Or `./infra/scripts/run.sh setup_test_users` |
 | **One tenant’s users** | `./infra/scripts/run.sh setup_tenant_users demo-bhis` | After 004 for that tenant |
 | **Super admin only** | `./infra/scripts/run.sh setup_super_admin` | After 005; env: `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_PASSWORD` |
-| **Docker dev** | `./infra/scripts/docker-manage.sh dev` | Backend + DB + frontend |
+| **Docker run (demo/MVP)** | `./infra/scripts/docker-manage.sh run` | Stop all, then start backend + db + frontend dev server. Open http://localhost:3000. Use this for prototype and demo. |
+| **Docker dev** | `./infra/scripts/docker-manage.sh dev` | Start backend + DB + frontend dev server (http://localhost:3000). |
+| **Docker prod** | `./infra/scripts/docker-manage.sh prod` | Start backend + db + frontend (Nginx; requires existing `frontend/build`). |
+| **Docker deploy** | `./infra/scripts/docker-manage.sh deploy` | Stop all, build frontend + backend, start prod stack. For production use later. |
 | **Docker migrate** | `./infra/scripts/docker-manage.sh migrate` | Runs migrations in Docker |
 | **Pre-deploy check** | `./infra/scripts/sanity-test.sh` | Used in CI |
 

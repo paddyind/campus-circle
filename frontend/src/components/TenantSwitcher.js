@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useSelector } from 'react-redux';
-import { getApiUrl, getApiHeaders, getTenantSlug, setTenantSlug } from '../api/client';
+import { useDispatch, useSelector } from 'react-redux';
+import { getApiUrl, getApiHeaders, getTenantSlug, setTenantSlug, DEPLOYMENT_TENANT_SLUG } from '../api/client';
+import { setCurrentTenant } from '../features/auth/authSlice';
+import { clearEventsCache, fetchEvents } from '../features/events/eventsSlice';
+import { fetchMyEvents } from '../features/dashboard/dashboardSlice';
 
 const displayName = (slug) => {
   if (slug === 'demo-circle') return 'Demo-Circle';
@@ -9,6 +12,7 @@ const displayName = (slug) => {
 };
 
 const TenantSwitcher = () => {
+  const dispatch = useDispatch();
   const { token, currentTenant: authTenant, allowedTenantSlugs: authSlugs } = useSelector((state) => state.auth);
   const profile = useSelector((state) => state.dashboard?.profile);
   const [current, setCurrent] = useState(authTenant || { name: getTenantSlug(), slug: getTenantSlug() });
@@ -48,12 +52,17 @@ const TenantSwitcher = () => {
       return;
     }
     setTenantSlug(slug);
+    dispatch(setCurrentTenant({ slug, name: displayName(slug) }));
+    dispatch(clearEventsCache());
     setOpen(false);
-    window.location.reload();
+    // Refetch for new tenant without full reload (faster; bootstrap no longer overwrites stored tenant)
+    dispatch(fetchEvents());
+    dispatch(fetchMyEvents());
   };
 
   // Only super admins can switch tenants; tenant admins manage their single tenant only
   if (!profile?.is_super_admin) return null;
+  if (DEPLOYMENT_TENANT_SLUG) return null; // tenant locked for this deployment
   if (loading || allowed.length <= 1) return null;
 
   return (
@@ -87,7 +96,7 @@ const TenantSwitcher = () => {
               {allowed.map((slug) => {
                 const isSelected = getTenantSlug() === slug;
                 return (
-                  <li key={slug} role="option">
+                  <li key={slug} role="option" aria-selected={isSelected}>
                     <button
                       type="button"
                       onClick={() => handleSelect(slug)}

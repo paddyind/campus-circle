@@ -82,15 +82,17 @@ The CampusCircle application is composed of the following services:
 - **Deployment Options**:
   - Local: Docker container
   - Production: Supabase managed database
+- **Data safety:** The app does not modify Supabase Auth tables; it only uses the Supabase Auth HTTP API. All DB writes go to app schemas (`campus_circle`, `campus_bhis`, `public.tenants`). Migrations add indexes on hot paths (events, registrations, users); they are idempotent (`CREATE IF NOT EXISTS`).
 
-### Reverse Proxy (Production)
+### Frontend (Production) / Reverse Proxy
 
+- **Container name**: `campus-circle-frontend` (Nginx image)
 - **Technology**: Nginx
-- **Purpose**: Route traffic and serve static files
+- **Purpose**: Serves the built frontend (static files) and routes `/api/*` to the backend
 - **Port**: 80
 - **Features**:
+  - Serves frontend static files from `frontend/build`
   - Routes `/api/*` to backend
-  - Serves frontend static files
   - SSL/TLS termination (when configured)
 
 ## Data Flow
@@ -157,8 +159,8 @@ Frontend (React Dev Server) → Backend (FastAPI) → Database (PostgreSQL)
 ### Production Mode
 
 ```
-Nginx → Frontend (Static Files) + Backend (FastAPI) → Database (PostgreSQL)
-Port 80    /usr/share/nginx/html      Port 8000            Port 5432
+campus-circle-frontend (Nginx) → Static files + proxy /api → Backend → Database
+Port 80                              Port 8000                Port 5432
 ```
 
 ## Multi-Tenancy (Product Model)

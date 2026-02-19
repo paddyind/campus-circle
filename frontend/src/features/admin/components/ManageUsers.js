@@ -1,36 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 
 import { getApiUrl, getApiHeaders } from '../../../api/client';
 
 const ManageUsers = () => {
-  const { token, user } = useSelector((state) => state.auth);
+  const { token, user, currentTenant } = useSelector((state) => state.auth);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [currentUserEmail, setCurrentUserEmail] = useState(null);
 
-  useEffect(() => {
-    fetchUsers();
-    // Ensure we have the current user's email
-    if (user?.email) {
-      setCurrentUserEmail(user.email.toLowerCase());
-    } else if (token) {
-      // Fetch profile if email is not in user object
-      fetch(getApiUrl('/users/me'), {
-        headers: getApiHeaders(token),
-      })
-        .then(res => res.json())
-        .then(profile => {
-          if (profile?.email) {
-            setCurrentUserEmail(profile.email.toLowerCase());
-          }
-        })
-        .catch(err => console.error('Error fetching current user:', err));
-    }
-  }, [token, user]);
-
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -59,7 +39,25 @@ const ManageUsers = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
+
+  useEffect(() => {
+    fetchUsers();
+    if (user?.email) {
+      setCurrentUserEmail(user.email.toLowerCase());
+    } else if (token) {
+      fetch(getApiUrl('/users/me'), {
+        headers: getApiHeaders(token),
+      })
+        .then(res => res.json())
+        .then(profile => {
+          if (profile?.email) {
+            setCurrentUserEmail(profile.email.toLowerCase());
+          }
+        })
+        .catch(err => console.error('Error fetching current user:', err));
+    }
+  }, [token, user, currentTenant?.slug, fetchUsers]);
 
   const handleRoleChange = async (userId, newRole) => {
     try {

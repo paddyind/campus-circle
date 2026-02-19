@@ -1,10 +1,13 @@
 """
 Set request tenant from X-Tenant header or user's default. Demo-Circle admins can access any tenant.
 """
+import logging
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from app.core.tenant import set_current_tenant
 from app.core.tenant_resolution import resolve_tenant
+
+logger = logging.getLogger(__name__)
 
 # Fallback when no tenants in DB (e.g. before migrations)
 DEFAULT_TENANT = {
@@ -25,7 +28,8 @@ class TenantMiddleware(BaseHTTPMiddleware):
         x_tenant = request.headers.get("X-Tenant") or request.headers.get("x-tenant")
         try:
             tenant = resolve_tenant(x_tenant, user_id)
-        except Exception:
+        except Exception as e:
+            logger.exception("Tenant resolution failed (DB or config): %s", e)
             tenant = None
         if not tenant:
             tenant = DEFAULT_TENANT

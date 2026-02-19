@@ -30,7 +30,7 @@ const ManageTenants = () => {
       }
     };
     fetchTenants();
-  }, [token]);
+  }, [token, selectedSlug]);
 
   useEffect(() => {
     if (!selectedSlug || !token) return;

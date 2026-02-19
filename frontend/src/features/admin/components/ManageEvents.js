@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
 import { getApiUrl, getApiHeaders } from '../../../api/client';
@@ -16,7 +16,7 @@ const emptyEventForm = () => ({
 });
 
 const ManageEvents = () => {
-  const { token } = useSelector((state) => state.auth);
+  const { token, currentTenant } = useSelector((state) => state.auth);
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -43,12 +43,7 @@ const ManageEvents = () => {
   const [formError, setFormError] = useState(null);
   const [editingEventId, setEditingEventId] = useState(null);
 
-  useEffect(() => {
-    fetchEvents();
-    fetchSchools();
-  }, []);
-
-  const fetchSchools = async () => {
+  const fetchSchools = useCallback(async () => {
     try {
       const response = await fetch(getApiUrl('/events/schools/'), {
         headers: getApiHeaders(token),
@@ -60,9 +55,9 @@ const ManageEvents = () => {
     } catch {
       setSchools([]);
     }
-  };
+  }, [token]);
 
-  const fetchEvents = async () => {
+  const fetchEvents = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -83,7 +78,12 @@ const ManageEvents = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
+
+  useEffect(() => {
+    fetchEvents();
+    fetchSchools();
+  }, [fetchEvents, fetchSchools, currentTenant?.slug]);
 
   const openRegistrationsModal = (eventId, eventTitle) => {
     setSelectedEventId(eventId);
@@ -459,6 +459,13 @@ const ManageEvents = () => {
                 >
                   View Details
                 </Link>
+                <button
+                  type="button"
+                  onClick={() => openRegistrationsModal(event.id, event.title)}
+                  className="flex-1 min-w-0 bg-sky-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-sky-700"
+                >
+                  Registrations
+                </button>
                 <button
                   type="button"
                   onClick={() => openEditModal(event)}

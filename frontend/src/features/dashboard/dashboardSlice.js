@@ -1,9 +1,10 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { getApiUrl, getApiHeaders } from '../../api/client';
+import { logout, loginUser, registerParent, registerStudent } from '../auth/authSlice';
 
 export const fetchProfile = createAsyncThunk(
   'dashboard/fetchProfile',
-  async (_, { getState, rejectWithValue }) => {
+  async (_, { getState, dispatch, rejectWithValue }) => {
     try {
       const { token } = getState().auth;
       if (!token) {
@@ -13,6 +14,10 @@ export const fetchProfile = createAsyncThunk(
         headers: getApiHeaders(token),
       });
 
+      if (response.status === 401) {
+        dispatch(logout());
+        return rejectWithValue('Session expired. Please log in again.');
+      }
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ detail: 'Failed to fetch profile' }));
         return rejectWithValue(errorData.detail || 'Failed to fetch profile');
@@ -31,7 +36,7 @@ export const fetchProfile = createAsyncThunk(
 
 export const fetchMyEvents = createAsyncThunk(
   'dashboard/fetchMyEvents',
-  async (_, { getState, rejectWithValue }) => {
+  async (_, { getState, dispatch, rejectWithValue }) => {
     try {
       const { token } = getState().auth;
       if (!token) {
@@ -42,6 +47,10 @@ export const fetchMyEvents = createAsyncThunk(
         headers: getApiHeaders(token),
       });
 
+      if (response.status === 401) {
+        dispatch(logout());
+        return rejectWithValue('Session expired. Please log in again.');
+      }
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ detail: 'Failed to fetch events' }));
         return rejectWithValue(errorData.detail || 'Failed to fetch events');
@@ -68,7 +77,14 @@ const initialState = {
 const dashboardSlice = createSlice({
   name: 'dashboard',
   initialState,
-  reducers: {},
+  reducers: {
+    setProfile: (state, action) => {
+      state.profile = action.payload;
+    },
+    clearProfile: (state) => {
+      state.profile = null;
+    },
+  },
   extraReducers: (builder) => {
     builder
       .addCase(fetchProfile.pending, (state) => {
@@ -94,8 +110,21 @@ const dashboardSlice = createSlice({
       .addCase(fetchMyEvents.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+      })
+      .addCase(logout, (state) => {
+        state.profile = null;
+      })
+      .addCase(loginUser.fulfilled, (state, action) => {
+        if (action.payload?.profile) state.profile = action.payload.profile;
+      })
+      .addCase(registerParent.fulfilled, (state, action) => {
+        if (action.payload?.profile) state.profile = action.payload.profile;
+      })
+      .addCase(registerStudent.fulfilled, (state, action) => {
+        if (action.payload?.profile) state.profile = action.payload.profile;
       });
   },
 });
 
+export const { setProfile, clearProfile } = dashboardSlice.actions;
 export default dashboardSlice.reducer;

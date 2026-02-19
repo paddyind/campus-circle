@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { Provider } from 'react-redux';
 import { store } from './app/store';
 import App from './App';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // Import CSS - use Tailwind by default, Bootstrap if theme is set
 if (process.env.REACT_APP_THEME === 'bootstrap') {
@@ -17,8 +18,10 @@ const root = createRoot(container);
 
 root.render(
   <React.StrictMode>
-    <Provider store={store}>
-      <App />
-    </Provider>
+    <ErrorBoundary>
+      <Provider store={store}>
+        <App />
+      </Provider>
+    </ErrorBoundary>
   </React.StrictMode>
 );

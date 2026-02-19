@@ -7,20 +7,18 @@ import { fetchMyEvents } from '../../dashboard/dashboardSlice';
 const CurrentEventsPage = () => {
   const dispatch = useDispatch();
   const { events, registeredEvents, loading, error } = useSelector((state) => state.events);
-  const { token, user } = useSelector((state) => state.auth);
+  const { token, user, currentTenant } = useSelector((state) => state.auth);
   const { profile } = useSelector((state) => state.dashboard);
   const isAdmin = user?.role === 'admin' || profile?.role === 'admin';
 
   useEffect(() => {
-    if (events.length === 0) {
-      dispatch(fetchEvents());
-    }
-  }, [dispatch, events.length]);
+    dispatch(fetchEvents());
+  }, [dispatch, currentTenant?.slug]);
 
   useEffect(() => {
     if (!token) return;
     dispatch(fetchMyEvents());
-  }, [dispatch, token]);
+  }, [dispatch, token, currentTenant?.slug]);
 
   const handleRegister = (eventId) => {
     const isParent = user?.role === 'parent' || profile?.role === 'parent';
@@ -43,8 +41,15 @@ const CurrentEventsPage = () => {
           <p className="mt-4 text-gray-600">Loading events...</p>
         </div>
       ) : error ? (
-        <div className="text-center py-12 text-red-600">
-          <p>Error loading events: {error}</p>
+        <div className="text-center py-12">
+          <p className="text-red-600 mb-4">Error loading events: {error}</p>
+          <button
+            type="button"
+            onClick={() => dispatch(fetchEvents())}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700"
+          >
+            Retry
+          </button>
         </div>
       ) : events.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

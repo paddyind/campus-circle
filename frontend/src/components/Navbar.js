@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { logout } from '../features/auth/authSlice';
-import { fetchProfile } from '../features/dashboard/dashboardSlice';
 import { getTenantSlug } from '../api/client';
 import TenantSwitcher from './TenantSwitcher';
 
@@ -10,19 +9,13 @@ const Navbar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const { user, token } = useSelector((state) => state.auth);
-  const isAuthenticated = Boolean(token && user);
+  const { user, token, authCheckComplete } = useSelector((state) => state.auth);
   const { profile } = useSelector((state) => state.dashboard);
+  const isAuthenticated = Boolean(token && user);
+  const authLoading = Boolean(token && !authCheckComplete);
   const [isOpen, setIsOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-
-  // Fetch profile when user is logged in to get full_name and role
-  useEffect(() => {
-    if (token && !profile) {
-      dispatch(fetchProfile());
-    }
-  }, [token, profile, dispatch]);
 
   const getDashboardHref = () => {
     const role = user?.role || profile?.role;
@@ -81,7 +74,8 @@ const Navbar = () => {
   const userDisplayName = user?.name || profile?.full_name || user?.email || profile?.email || 'Profile';
   const userEmail = user?.email || profile?.email || '';
   const userInitial = (userDisplayName && userDisplayName[0]) ? userDisplayName[0].toUpperCase() : '?';
-  const currentTenantName = useSelector((state) => state.auth.currentTenant?.name)
+  const currentTenant = useSelector((state) => state.auth.currentTenant);
+  const currentTenantName = currentTenant?.name
     || (getTenantSlug() === 'demo-bhis' ? 'Demo-BHIS' : getTenantSlug() === 'demo-circle' ? 'Demo-Circle' : getTenantSlug());
   const isSuperAdmin = Boolean(profile?.is_super_admin);
   const userRoleLabel = isSuperAdmin ? 'Super Admin' : (user?.role || profile?.role || '');
@@ -104,14 +98,12 @@ const Navbar = () => {
           <div className="hidden lg:flex lg:items-center lg:space-x-1 lg:ml-8">
             {navItems.map((item) =>
               item.subMenu ? (
-                <div
-                  key={item.name}
-                  className="relative"
-                  onMouseEnter={() => setManageOpen(true)}
-                  onMouseLeave={() => setManageOpen(false)}
-                >
+                <div key={item.name} className="relative">
                   <button
                     type="button"
+                    onClick={() => setManageOpen((open) => !open)}
+                    aria-expanded={manageOpen}
+                    aria-haspopup="true"
                     className={`${
                       manageSubMenu.some((s) => isActive(s.href))
                         ? 'bg-white bg-opacity-25 text-white shadow-md'
@@ -122,27 +114,31 @@ const Navbar = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
                     {item.name}
-                    <svg className="ml-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className={`ml-1 h-4 w-4 transition-transform ${manageOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                     </svg>
                   </button>
                   {manageOpen && (
-                    <div className="absolute left-0 top-full mt-1 py-1 w-52 rounded-lg bg-white shadow-lg z-30 border border-gray-200">
-                      {item.subMenu.map((sub) => (
-                        <Link
-                          key={sub.name}
-                          to={sub.href}
-                          className={`flex items-center px-4 py-2 text-sm font-medium ${
-                            isActive(sub.href) ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-gray-50'
-                          }`}
-                        >
+                    <>
+                      <div className="fixed inset-0 z-10" aria-hidden="true" onClick={() => setManageOpen(false)} />
+                      <div className="absolute left-0 top-full mt-1 py-1 w-52 rounded-lg bg-white shadow-lg z-30 border border-gray-200">
+                        {item.subMenu.map((sub) => (
+                          <Link
+                            key={sub.name}
+                            to={sub.href}
+                            onClick={() => setManageOpen(false)}
+                            className={`flex items-center px-4 py-2 text-sm font-medium ${
+                              isActive(sub.href) ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-gray-50'
+                            }`}
+                          >
                           <svg className="mr-3 h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d={sub.icon} />
                           </svg>
                           {sub.name}
-                        </Link>
-                      ))}
-                    </div>
+                          </Link>
+                        ))}
+                      </div>
+                    </>
                   )}
                 </div>
               ) : (
@@ -166,7 +162,9 @@ const Navbar = () => {
 
           <div className="hidden lg:flex lg:items-center lg:space-x-3 lg:ml-6">
             {isAuthenticated && <TenantSwitcher />}
-            {!isAuthenticated ? (
+            {authLoading ? (
+              <span className="text-white/90 text-sm font-medium px-4 py-2" aria-label="Loading">Loading…</span>
+            ) : !isAuthenticated ? (
               <Link
                 to="/login"
                 className="bg-white text-indigo-600 hover:bg-gray-50 px-5 py-2 rounded-lg text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200"
@@ -318,7 +316,9 @@ const Navbar = () => {
                   <TenantSwitcher />
                 </div>
               )}
-              {!isAuthenticated ? (
+              {authLoading ? (
+                <span className="block px-4 py-3 text-white/90 text-sm">Loading…</span>
+              ) : !isAuthenticated ? (
                 <Link
                   to="/login"
                   onClick={() => setIsOpen(false)}

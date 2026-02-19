@@ -1,8 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
 import { getApiUrl, getApiHeaders, getTenantSlug } from '../../../api/client';
-import { fetchProfile } from '../../dashboard/dashboardSlice';
 import EditProfileModal from './EditProfileModal';
 import AddChildModal from './AddChildModal';
 
@@ -13,7 +12,6 @@ const tenantDisplayName = (slug) => {
 };
 
 const ProfilePage = () => {
-  const dispatch = useDispatch();
   const { profile, loading, error } = useSelector((state) => state.dashboard);
   const { user, token } = useSelector((state) => state.auth);
   const [children, setChildren] = useState([]);
@@ -21,12 +19,6 @@ const ProfilePage = () => {
   const [loadingRelations, setLoadingRelations] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAddChildModalOpen, setIsAddChildModalOpen] = useState(false);
-
-  useEffect(() => {
-    if (token) {
-      dispatch(fetchProfile());
-    }
-  }, [dispatch, token]);
 
   const fetchRelationships = useCallback(async () => {
     if (!token || !user) return;

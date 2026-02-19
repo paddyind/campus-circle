@@ -1,23 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
+import { logout } from '../authSlice';
 
 const SessionNotifier = () => {
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
   const [notification, setNotification] = useState(null);
   const [isVisible, setIsVisible] = useState(false);
   const { isAuthenticated } = useSelector((state) => state.auth);
 
   useEffect(() => {
-    // Only show session alert if user is logged in
-    if (!isAuthenticated) {
-      return;
-    }
-
-    // Simulate a session alert after 5 minutes (300000ms) for logged-in users
+    if (!isAuthenticated) return;
+    // Warn before typical JWT expiry (e.g. 50 min if token is 1h)
     const timer = setTimeout(() => {
       setNotification('Your session is about to expire.');
       setIsVisible(true);
-    }, 300000); // 5 minutes
-
+    }, 50 * 60 * 1000); // 50 minutes
     return () => clearTimeout(timer);
   }, [isAuthenticated]);
 
@@ -26,12 +25,17 @@ const SessionNotifier = () => {
     setTimeout(() => setNotification(null), 300);
   };
 
-  if (!notification || !isVisible) {
-    return null;
-  }
+  const handleLogInAgain = () => {
+    setIsVisible(false);
+    setNotification(null);
+    dispatch(logout());
+    navigate('/login', { replace: true, state: { from: 'session_expired' } });
+  };
+
+  if (!notification || !isVisible) return null;
 
   return (
-    <div className={`fixed top-20 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'}`}>
+    <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 opacity-100 translate-y-0">
       <div className="bg-amber-50 border-l-4 border-amber-400 rounded-lg shadow-lg p-4 max-w-md w-full mx-4">
         <div className="flex items-start">
           <div className="flex-shrink-0">
@@ -41,13 +45,22 @@ const SessionNotifier = () => {
           </div>
           <div className="ml-3 flex-1">
             <p className="text-sm font-medium text-amber-800">{notification}</p>
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleLogInAgain}
+                className="text-sm font-medium text-indigo-600 hover:text-indigo-800"
+              >
+                Log in again
+              </button>
+              <span className="text-amber-600">|</span>
+              <button type="button" onClick={handleDismiss} className="text-sm text-amber-700 hover:text-amber-900">
+                Dismiss
+              </button>
+            </div>
           </div>
           <div className="ml-4 flex-shrink-0">
-            <button
-              onClick={handleDismiss}
-              className="inline-flex text-amber-400 hover:text-amber-600 focus:outline-none transition-colors"
-            >
-              <span className="sr-only">Dismiss</span>
+            <button type="button" onClick={handleDismiss} className="inline-flex text-amber-400 hover:text-amber-600 focus:outline-none" aria-label="Dismiss">
               <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
               </svg>

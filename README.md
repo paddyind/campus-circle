@@ -63,21 +63,17 @@ ENABLE_EMAIL_CONFIRMATION=false
 
 **Get Supabase credentials from**: Supabase Dashboard → Settings → API
 
-### 4. Deploy and Start Services
+### 4. Run the Application (Prototype / MVP / Demo)
 
-#### Build Docker Images
+For **development and demo**, use dev mode. Production (Nginx on port 80) is for later.
 
-```bash
-./infra/scripts/docker-manage.sh build
-```
-
-#### Start Core Services (Database + Backend)
+#### One command: start the app (recommended)
 
 ```bash
-./infra/scripts/docker-manage.sh start
+./infra/scripts/docker-manage.sh run
 ```
 
-This starts PostgreSQL (port 5432) and FastAPI backend (port 8000).
+This stops any existing containers, then starts backend + database + frontend dev server. Open **http://localhost:3000** in your browser.
 
 #### Run database migrations and setup
 
@@ -108,27 +104,22 @@ This will guide you through disabling email confirmation in Supabase Dashboard.
 
 **Note**: Email confirmation should be **enabled** in production for security.
 
-#### Start Frontend (Development Mode)
+#### Alternative: start step by step
 
 ```bash
+./infra/scripts/docker-manage.sh build
+./infra/scripts/docker-manage.sh start
+./infra/scripts/run.sh db setup
 ./infra/scripts/docker-manage.sh dev
 ```
 
-This starts the React frontend with hot reload (port 3000).
-
-#### Start Frontend (Production Mode)
-
-```bash
-./infra/scripts/docker-manage.sh prod
-```
-
-This starts Nginx serving the built frontend (port 80).
-
 ### 5. Access the Application
 
-- **Frontend**: http://localhost:3000 (dev) or http://localhost (prod)
-- **Backend API**: http://localhost:8000
-- **API Documentation**: http://localhost:8000/docs
+- **Frontend (dev/demo):** http://localhost:3000
+- **Backend API:** http://localhost:8000
+- **API docs:** http://localhost:8000/docs
+
+**Production (later):** Use `./infra/scripts/docker-manage.sh deploy` or `prod` to serve the app on http://localhost (port 80). For prototype and MVP, use dev (port 3000).
 
 ## 🧪 Validation and Testing
 
@@ -146,14 +137,14 @@ This checks environment, Docker, database layout, backend/frontend structure, an
 
 ```bash
 # Check if schemas exist
-docker exec campus-circle-db-1 psql -U postgres -d postgres -c "\dn campus_circle*"
+docker exec campus-circle-db psql -U postgres -d postgres -c "\dn campus_circle*"
 
 # Check tables
-docker exec campus-circle-db-1 psql -U postgres -d postgres -c "\dt campus_circle.*"
+docker exec campus-circle-db psql -U postgres -d postgres -c "\dt campus_circle.*"
 
 # Verify seed data
-docker exec campus-circle-db-1 psql -U postgres -d postgres -c "SELECT COUNT(*) FROM campus_circle.schools;"
-docker exec campus-circle-db-1 psql -U postgres -d postgres -c "SELECT COUNT(*) FROM campus_circle.events;"
+docker exec campus-circle-db psql -U postgres -d postgres -c "SELECT COUNT(*) FROM campus_circle.schools;"
+docker exec campus-circle-db psql -U postgres -d postgres -c "SELECT COUNT(*) FROM campus_circle.events;"
 ```
 
 ### Test API Endpoints
@@ -199,10 +190,13 @@ curl http://localhost:8000/api/events
 # Run migrations
 ./infra/scripts/docker-manage.sh migrate
 
-# Development mode (frontend with hot reload)
+# Demo/MVP: one command to run the app (dev mode)
+./infra/scripts/docker-manage.sh run
+
+# Or step by step: dev mode (frontend at http://localhost:3000)
 ./infra/scripts/docker-manage.sh dev
 
-# Production mode (nginx serving built frontend)
+# Production mode (later; nginx serving built frontend at http://localhost)
 ./infra/scripts/docker-manage.sh prod
 ```
 

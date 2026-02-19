@@ -8,13 +8,14 @@ from app.api import users, events, admin, tenants
 
 app = FastAPI(redirect_slashes=False)
 
-# CORS middleware
+# CORS: cache preflight (OPTIONS) for 24h to reduce latency and duplicate OPTIONS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://localhost:80", "http://localhost"],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Tenant", "Accept"],
+    max_age=86400,  # 24h preflight cache
 )
 
 app.add_middleware(AuthMiddleware)

@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchProfile, fetchMyEvents } from '../dashboardSlice';
+import { fetchMyEvents } from '../dashboardSlice';
 import { Link } from 'react-router-dom';
 
 const ParentDashboard = () => {
@@ -8,7 +8,6 @@ const ParentDashboard = () => {
   const { profile, events, loading, error } = useSelector((state) => state.dashboard);
 
   useEffect(() => {
-    dispatch(fetchProfile());
     dispatch(fetchMyEvents());
   }, [dispatch]);
 

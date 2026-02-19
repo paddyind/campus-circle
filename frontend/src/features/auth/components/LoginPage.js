@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useLocation } from 'react-router-dom';
 import { loginUser } from '../authSlice';
 
 const LoginPage = () => {
+  const location = useLocation();
+  const sessionExpired = location.state?.from === 'session_expired';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -45,6 +47,11 @@ const LoginPage = () => {
               create a new account
             </Link>
           </p>
+          {sessionExpired && (
+            <p className="mt-3 text-center text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md py-2 px-3">
+              Your session expired. Please log in again.
+            </p>
+          )}
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="rounded-md shadow-sm -space-y-px">

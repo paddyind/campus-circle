@@ -1,9 +1,30 @@
 import React from 'react';
+import { getTenantSlug } from '../../../api/client';
 
 // Feature flag to show/hide test credentials (set to false for production)
 const SHOW_TEST_CREDENTIALS = process.env.REACT_APP_SHOW_TEST_CREDENTIALS !== 'false';
 
+// Tenant-specific demo credentials (per TENANTS_AND_DEPLOYMENT / setup-test-users)
+const TENANT_CREDENTIALS = {
+  'demo-circle': {
+    parent: { email: 'demo_parent@campuscircle.com', password: 'password123' },
+    student: { email: 'demo_student@campuscircle.com', password: 'password123' },
+    admin: { email: 'demo_admin@campuscircle.com', password: 'password123' },
+  },
+  'demo-bhis': {
+    parent: { email: 'bhis_parent@campuscircle.com', password: 'password123' },
+    student: { email: 'bhis_student@campuscircle.com', password: 'password123' },
+    admin: { email: 'bhis_admin@campuscircle.com', password: 'password123' },
+  },
+};
+
+const getCredentials = () => {
+  const slug = (getTenantSlug() || 'demo-circle').toLowerCase();
+  return TENANT_CREDENTIALS[slug] || TENANT_CREDENTIALS['demo-circle'];
+};
+
 const HelpPage = () => {
+  const creds = getCredentials();
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <h1 className="text-3xl font-bold text-gray-900 mb-6">Help & Support</h1>
@@ -13,7 +34,7 @@ const HelpPage = () => {
           <>
             <h2 className="text-2xl font-semibold text-gray-800 mb-4">Test Login Credentials</h2>
             <p className="text-gray-600 mb-6">
-              For testing purposes, you can use the following test credentials to log in as a Parent, Student, or Admin.
+              For testing purposes, you can use the following test credentials to log in as a Parent, Student, or Admin in this tenant.
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -21,8 +42,8 @@ const HelpPage = () => {
               <div className="border border-gray-200 rounded-lg p-6 bg-blue-50 min-w-0 overflow-hidden">
                 <h3 className="text-xl font-bold text-gray-800 mb-3">Parent Login</h3>
                 <div className="space-y-2 text-gray-700 break-words">
-                  <p><strong>Email:</strong> <span className="break-all">demo_parent@campuscircle.com</span></p>
-                  <p><strong>Password:</strong> password123</p>
+                  <p><strong>Email:</strong> <span className="break-all">{creds.parent.email}</span></p>
+                  <p><strong>Password:</strong> {creds.parent.password}</p>
                 </div>
               </div>
 
@@ -30,8 +51,8 @@ const HelpPage = () => {
               <div className="border border-gray-200 rounded-lg p-6 bg-green-50 min-w-0 overflow-hidden">
                 <h3 className="text-xl font-bold text-gray-800 mb-3">Student Login</h3>
                 <div className="space-y-2 text-gray-700 break-words">
-                  <p><strong>Email:</strong> <span className="break-all">demo_student@campuscircle.com</span></p>
-                  <p><strong>Password:</strong> password123</p>
+                  <p><strong>Email:</strong> <span className="break-all">{creds.student.email}</span></p>
+                  <p><strong>Password:</strong> {creds.student.password}</p>
                 </div>
               </div>
 
@@ -39,8 +60,8 @@ const HelpPage = () => {
               <div className="border border-gray-200 rounded-lg p-6 bg-purple-50 min-w-0 overflow-hidden">
                 <h3 className="text-xl font-bold text-gray-800 mb-3">Admin Login</h3>
                 <div className="space-y-2 text-gray-700 break-words">
-                  <p><strong>Email:</strong> <span className="break-all">demo_admin@campuscircle.com</span></p>
-                  <p><strong>Password:</strong> password123</p>
+                  <p><strong>Email:</strong> <span className="break-all">{creds.admin.email}</span></p>
+                  <p><strong>Password:</strong> {creds.admin.password}</p>
                 </div>
               </div>
             </div>

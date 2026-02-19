@@ -1,10 +1,13 @@
 """
 Tenant list and current-tenant for switcher. Admin tenant settings in admin.py.
 """
-from fastapi import APIRouter, Depends, Request
+import logging
+import psycopg2
+from fastapi import APIRouter, Depends, Request, HTTPException
 from app.auth.dependencies import get_current_user
-from app.core.tenant_resolution import get_all_tenants, get_allowed_tenant_slugs
+from app.core.tenant_resolution import get_all_tenants, get_allowed_tenant_slugs, resolve_tenant_by_email
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -25,11 +28,25 @@ async def list_tenants(request: Request):
 async def current_tenant(request: Request):
     """
     Current tenant (from X-Tenant or default) and list of allowed tenant slugs for switcher.
+    For non-super-admin users with multiple tenants, prefer the tenant that matches their email (e.g. bhis_* -> demo-bhis).
     """
     tenant = getattr(request.state, "tenant", None) or {}
     user = getattr(request.state, "user", None)
     user_id = (user.get("sub") or user.get("id")) if user else None
-    allowed_slugs = get_allowed_tenant_slugs(user_id)
+    try:
+        allowed_slugs = get_allowed_tenant_slugs(user_id)
+    except psycopg2.OperationalError as e:
+        logger.exception("Database unavailable in /tenants/current: %s", e)
+        raise HTTPException(
+            status_code=503,
+            detail="Database temporarily unavailable. Check SUPABASE_DB_* config and network.",
+        ) from e
+    # Prefer tenant by email when user has multiple (e.g. BHIS parent should see demo-bhis, not demo-circle)
+    user_email = (user or {}).get("email") or ""
+    if user_email and len(allowed_slugs) > 1:
+        preferred = resolve_tenant_by_email(user_email)
+        if preferred and preferred.get("slug") in allowed_slugs:
+            tenant = preferred
     return {
         "tenant": {
             "id": str(tenant.get("id")) if tenant.get("id") else None,

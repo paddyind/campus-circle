@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Session expiry:** Redirect to login when token is cleared (AuthRedirect); 401 from events/dashboard API dispatches logout; SessionNotifier “Log in again”; login page shows “Your session expired” when applicable.
+- **Tenant by login:** Backend resolves tenant by email on login (e.g. `bhis_*` → demo-bhis); check and auto-link use that schema; `GET /tenants/current` prefers tenant by email when user has multiple; frontend always sets tenant from API for non–super-admins.
+- **Default tenant:** When not logged in, `getTenantSlug()` always returns demo-circle; super admin always defaults to Demo-Circle on login/bootstrap; logout clears stored tenant; `REACT_APP_TENANT_SLUG` for tenant-specific deployments.
+- **Tenant switch refresh:** Events cache cleared on setCurrentTenant; Home, Events, Manage Users/Schools/Events refetch when `currentTenant` changes so data updates without leaving the page.
+- **Manage menu:** Click-to-open dropdown (no hover-only); overlay and link click close menu for easier “Manage Users” access.
+
+### Fixed
+- AuthRedirect: removed unused `React` import (ESLint).
+- Backend login auto-link: indentation of try/except block under `if not user_check` (IndentationError on container start).
+
 ### Changed
 - **Database layout**: Schema/seed SQL moved from `database/migrations/` to `database/`; migrations are optional when no migration data. Backups and initial/demo data use `database/backup/`. Scripts and docs updated.
 - **Docs**: Children-under-14 design merged into `docs/DATABASE.md`; standalone `CHILDREN_UNDER_14_DESIGN.md` removed.

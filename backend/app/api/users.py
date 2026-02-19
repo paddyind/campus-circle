@@ -1,9 +1,11 @@
+import psycopg2
 from fastapi import APIRouter, HTTPException, Depends
 from typing import Optional
 from app.schemas import ParentCreate, StudentCreate, UserLogin, UserProfile, Event, EventRegistration, ProfileUpdate, ContactSubmission, ContactSubmissionResponse, ChildCreate, ChildUpdate, EventRegistrationRequest
 from app.core.supabase import supabase
-from app.core.database import execute_query_one, execute_query
-from app.core.tenant_resolution import is_super_admin
+from app.core.database import execute_query_one, execute_query, user_exists_in_schema
+from app.core.tenant_resolution import is_super_admin, resolve_tenant_by_email, get_all_tenants
+from app.core.tenant import set_current_tenant
 from app.auth.dependencies import get_current_user
 
 router = APIRouter()
@@ -216,7 +218,12 @@ async def login(credentials: UserLogin):
         if not auth_response or not auth_response.session:
             raise HTTPException(status_code=401, detail="Invalid login credentials")
 
-        # Check if user exists in campus_circle schema using direct PostgreSQL query
+        # Resolve tenant by email so we check/auto-link in the correct schema (e.g. bhis_* -> demo-bhis)
+        tenant_for_user = resolve_tenant_by_email(credentials.email or "")
+        if tenant_for_user and not is_super_admin(auth_response.user.id):
+            set_current_tenant(tenant_for_user)
+
+        # Check if user exists in the resolved tenant's schema (campus_circle or campus_bhis, etc.)
         user_check = execute_query_one(
             "SELECT * FROM campus_circle.users WHERE id = %s",
             (auth_response.user.id,)
@@ -227,56 +234,67 @@ async def login(credentials: UserLogin):
             if is_super_admin(auth_response.user.id):
                 user_check = True
             else:
-                # User authenticated but not registered in Campus Circle - auto-link for development
-                # campus_circle.users.id FK references campus_circle_auth.users(id), so sync mirror first
-                try:
-                    _sync_auth_user_to_campus_circle_auth(auth_response.user.id, credentials.email)
-                    user_metadata = getattr(auth_response.user, 'user_metadata', {}) or {}
-                    existing_role_row = execute_query_one(
-                        "SELECT role FROM campus_circle.users WHERE id = %s",
-                        (auth_response.user.id,)
-                    )
-                    if existing_role_row:
-                        role = existing_role_row['role']
-                    else:
-                        role = user_metadata.get('role', 'student')
-                    existing_role_row = execute_query_one(
-                        "SELECT role FROM campus_circle.users WHERE id = %s",
-                        (auth_response.user.id,)
-                    )
-                    if existing_role_row and existing_role_row.get('role'):
-                        role = existing_role_row['role']
-                        execute_query(
-                            "INSERT INTO campus_circle.users (id, role) VALUES (%s, %s) ON CONFLICT (id) DO UPDATE SET role = campus_circle.users.role",
-                            (auth_response.user.id, role)
+                # If not in email-resolved tenant, check if user exists in another (e.g. previously wrong tenant)
+                auth_user_id = auth_response.user.id
+                for t in get_all_tenants():
+                    if tenant_for_user and t.get("slug") == tenant_for_user.get("slug"):
+                        continue
+                    if user_exists_in_schema(t["schema_app"], auth_user_id):
+                        set_current_tenant(t)
+                        user_check = True
+                        break
+                if not user_check:
+                    # User not in any tenant - auto-link to tenant resolved by email
+                    # Sync auth mirror first, then app schema (execute_query uses current tenant)
+                    try:
+                        _sync_auth_user_to_campus_circle_auth(auth_response.user.id, credentials.email)
+                        user_metadata = getattr(auth_response.user, 'user_metadata', {}) or {}
+                        existing_role_row = execute_query_one(
+                            "SELECT role FROM campus_circle.users WHERE id = %s",
+                            (auth_response.user.id,)
                         )
-                    else:
-                        execute_query(
-                            "INSERT INTO campus_circle.users (id, role) VALUES (%s, %s) ON CONFLICT (id) DO UPDATE SET role = EXCLUDED.role",
-                            (auth_response.user.id, role)
+                        if existing_role_row:
+                            role = existing_role_row['role']
+                        else:
+                            role = user_metadata.get('role', 'student')
+                        existing_role_row = execute_query_one(
+                            "SELECT role FROM campus_circle.users WHERE id = %s",
+                            (auth_response.user.id,)
                         )
-                    if role == 'parent':
-                        execute_query(
-                            """INSERT INTO campus_circle.parents (id, email, full_name, phone) 
-                               VALUES (%s, %s, %s, %s) ON CONFLICT (id) DO NOTHING""",
-                            (auth_response.user.id, credentials.email, user_metadata.get('full_name', 'User'), '')
+                        if existing_role_row and existing_role_row.get('role'):
+                            role = existing_role_row['role']
+                            execute_query(
+                                "INSERT INTO campus_circle.users (id, role) VALUES (%s, %s) ON CONFLICT (id) DO UPDATE SET role = campus_circle.users.role",
+                                (auth_response.user.id, role)
+                            )
+                        else:
+                            execute_query(
+                                "INSERT INTO campus_circle.users (id, role) VALUES (%s, %s) ON CONFLICT (id) DO UPDATE SET role = EXCLUDED.role",
+                                (auth_response.user.id, role)
+                            )
+                        if role == 'parent':
+                            execute_query(
+                                """INSERT INTO campus_circle.parents (id, email, full_name, phone) 
+                                   VALUES (%s, %s, %s, %s) ON CONFLICT (id) DO NOTHING""",
+                                (auth_response.user.id, credentials.email, user_metadata.get('full_name', 'User'), '')
+                            )
+                        elif role == 'student':
+                            execute_query(
+                                """INSERT INTO campus_circle.students (id, full_name, status) 
+                                   VALUES (%s, %s, 'active') ON CONFLICT (id) DO NOTHING""",
+                                (auth_response.user.id, user_metadata.get('full_name', 'User'))
+                            )
+                        user_check = execute_query_one(
+                            "SELECT * FROM campus_circle.users WHERE id = %s",
+                            (auth_response.user.id,)
                         )
-                    elif role == 'student':
-                        execute_query(
-                            """INSERT INTO campus_circle.students (id, full_name, status) 
-                               VALUES (%s, %s, 'active') ON CONFLICT (id) DO NOTHING""",
-                            (auth_response.user.id, user_metadata.get('full_name', 'User'))
-                        )
-                    user_check = execute_query_one(
-                        "SELECT * FROM campus_circle.users WHERE id = %s",
-                        (auth_response.user.id,)
-                    )
-                    print(f"Auto-linked user {credentials.email} to campus_circle schema with role {role}.")
-                except Exception as link_error:
-                    import logging
-                    logger = logging.getLogger(__name__)
-                    logger.error(f"Auto-linking error: {str(link_error)}")
-                    print(f"Auto-linking failed: {str(link_error)}")
+                        schema_name = (tenant_for_user or {}).get("schema_app", "campus_circle")
+                        print(f"Auto-linked user {credentials.email} to {schema_name} schema with role {role}.")
+                    except Exception as link_error:
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.error(f"Auto-linking error: {str(link_error)}")
+                        print(f"Auto-linking failed: {str(link_error)}")
 
         if not user_check:
             # Super admins (in public.super_admins) can log in without being in any tenant's users table
@@ -493,6 +511,11 @@ async def get_my_profile(current_user: dict = Depends(get_current_user)):
     except HTTPException:
         raise
     except Exception as e:
+        if isinstance(e, psycopg2.OperationalError):
+            raise HTTPException(
+                status_code=503,
+                detail="Database temporarily unavailable. Check SUPABASE_DB_* config and network.",
+            ) from e
         raise HTTPException(status_code=500, detail=f"Error fetching profile: {str(e)[:100]}")
 
 @router.put("/me", response_model=UserProfile)

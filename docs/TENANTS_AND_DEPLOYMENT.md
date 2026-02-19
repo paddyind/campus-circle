@@ -68,6 +68,27 @@ Demo-Circle admins manage **only the Demo-Circle tenant** (users, schools, event
 - **Allowed tenants:** Only **super admins** (in `public.super_admins`) get all tenants. Tenant admins (e.g. Demo-Circle admin, Demo-BHIS admin) get only the single tenant where they have a user record.  
 - **Frontend:** The tenant switcher is shown **only to super admins**. Tenant admins manage their one tenant only (no switcher). Choice is stored in `localStorage` and sent as `X-Tenant` on every request.
 
+**Default tenant (frontend):**
+
+| Situation | Tenant used | Where it’s enforced |
+|-----------|-------------|---------------------|
+| **Not logged in** (no token) | Always **demo-circle** | `api/client.js` `getTenantSlug()`: if there is no `token` in localStorage, returns `'demo-circle'`. So home, Help, and events never show another tenant when you’re logged out. |
+| **Super admin login or app load** | Always **Demo-Circle** first | `authSlice`: on login and on bootstrap, if user is super admin we set `setTenantSlug('demo-circle')` and `currentTenant = { slug: 'demo-circle', name: 'Demo-Circle' }`. So super admin never lands on BHIS by default. They can switch to BHIS in the session; on next login or refresh they get Demo-Circle again. |
+| **Other users** | Stored tenant or backend default | Normal flow: `localStorage` tenant or first allowed tenant from API. |
+| **Logout** | Stored tenant is cleared | `authSlice` logout calls `clearStoredTenant()` so the next visit (logged out or logged in) uses the defaults above. |
+| **Tenant-specific deployment** | Fixed tenant | Set `REACT_APP_TENANT_SLUG` at build time; `getTenantSlug()` returns that and the switcher is hidden. |
+
+**Tenant by login (backend):**
+
+- On **login**, the backend resolves which tenant the user belongs to by **email** (e.g. `bhis_parent@…` → demo-bhis). User check and auto-link use that tenant’s schema, so new users are linked to the correct tenant.
+- **Auto-link:** If the user is not in any tenant, they are created in the email-resolved tenant (not always Demo-Circle). Convention: local part `bhis_*` or containing `bhis` → demo-bhis; else → demo-circle.
+- **`GET /tenants/current`:** For users with access to multiple tenants, the API prefers the tenant that matches their email (e.g. BHIS parent sees Demo-BHIS even if they exist in both tenants).
+- **Frontend:** After login or bootstrap, the app always sets the current tenant from the API for non–super-admins, so the UI matches the user’s tenant.
+
+**Session expiry and redirect:**
+
+- When the token is cleared (logout or 401 from API), the app redirects to `/login` with a “session expired” message. SessionNotifier offers “Log in again.” Admin and events pages refetch when tenant changes so switching tenant updates data without leaving the page.
+
 ### 1.6 Future Client Tenants
 
 - **Naming:** `tenant_<slug>` (e.g. `tenant_acme` / `tenant_acme_auth`) or dedicated schemas like `campus_bhis`.  
@@ -162,6 +183,11 @@ When Phase 3 is implemented:
 
 ## 4. Deployment (Firebase and Free Hosting)
 
+### 4.0 Supabase and data safety
+
+- **Deploying the app (containers or build) does not run migrations or delete data.** Supabase Auth (`auth.users`) is never modified by this app; the backend only uses the Supabase Auth HTTP API. Your PostgreSQL app schemas are read/written at runtime only.
+- **When to run what:** Run `./infra/scripts/run.sh db migrate` only when you need to apply or update schema (first deploy or new migrations). Run `./infra/scripts/run.sh db setup` only for a fresh/test environment (migrate + demo users + super admin). **Do not run `db reset`** on a DB you want to keep; it drops app schemas.
+
 ### 4.1 Overview
 
 | Layer | Recommended (free) | Alternatives |
@@ -214,11 +240,25 @@ Goals: deploy to Firebase or other free hosting; keep CI, test data, and doc str
 
 | Variable | Where | Purpose |
 |----------|--------|---------|
-| `REACT_APP_API_URL` | Frontend build | Backend API base (e.g. `https://xxx.run.app/api`) |
+| `REACT_APP_API_URL` | Frontend build | Backend API base (e.g. `https://xxx.run.app/api` or `http://localhost/api` for local containers) |
 | `SUPABASE_URL` | Backend | Supabase project URL |
 | `SUPABASE_ANON_KEY` | Backend | Supabase anon key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Backend | Service role (if used) |
-| `SUPABASE_DB_*` | Backend / migrations | PostgreSQL connection |
+| `SUPABASE_DB_*` | Backend / migrations | PostgreSQL connection; use `SUPABASE_DB_SSLMODE=require` for Supabase |
+
+### 4.7 Deploy containers (for testing)
+
+From project root with `.env` configured:
+
+1. **One-step deploy** (builds frontend with `REACT_APP_API_URL`, builds backend, starts backend + db + frontend):
+   ```bash
+   REACT_APP_API_URL=http://localhost/api ./infra/scripts/docker-manage.sh deploy
+   ```
+   Use your real backend URL instead of `http://localhost/api` if the browser will hit a different host.
+
+2. **Or step by step:** build frontend (`cd frontend && REACT_APP_API_URL=http://localhost/api npm ci && npm run build`), then `./infra/scripts/docker-manage.sh build` and `./infra/scripts/docker-manage.sh prod`.
+
+Containers: **campus-circle-frontend** (serves the app at http://localhost via Nginx), **campus-circle-backend**, **campus-circle-db**. If the DB has no schema yet, run `./infra/scripts/run.sh db migrate` once; optionally `./infra/scripts/run.sh db setup` for demo users and super admin.
 
 ---
 
@@ -229,6 +269,7 @@ Goals: deploy to Firebase or other free hosting; keep CI, test data, and doc str
 | [ARCHITECTURE.md](ARCHITECTURE.md) | System overview, tenant model, Demo-Circle as default. |
 | [TENANTS_AND_DEPLOYMENT.md](TENANTS_AND_DEPLOYMENT.md) | This file: tenants (model, baseline, phases) and deployment. |
 | [DATABASE.md](DATABASE.md) | Schema details, migrations, backups. |
+| [FRONTEND_STANDARDS.md](FRONTEND_STANDARDS.md) | Frontend performance and auth UX standards. |
 
 ---
 

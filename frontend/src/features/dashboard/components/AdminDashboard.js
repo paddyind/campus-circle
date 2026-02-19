@@ -1,16 +1,10 @@
-import React, { useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import React from 'react';
+import { useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
-import { fetchProfile } from '../../dashboard/dashboardSlice';
 
 const AdminDashboard = () => {
-  const dispatch = useDispatch();
   const { profile, loading, error } = useSelector((state) => state.dashboard);
   const { user } = useSelector((state) => state.auth);
-
-  useEffect(() => {
-    dispatch(fetchProfile());
-  }, [dispatch]);
 
   if (loading) {
     return (

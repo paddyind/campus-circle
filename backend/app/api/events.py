@@ -171,7 +171,7 @@ async def delete_school(school_id: str, _=Depends(RoleChecker(["admin"]))):
 @router.get("/", response_model=list[Event])
 async def get_events():
     try:
-        # Only show current (ongoing) and future events, exclude past events
+        # Only show current (ongoing) and future events, exclude past events. LIMIT for safety at scale.
         query = """
             SELECT 
                 e.id, e.school_id, e.title, e.description, 
@@ -187,6 +187,7 @@ async def get_events():
                 AND (e.end_time IS NULL OR e.end_time >= NOW())
             GROUP BY e.id, e.school_id, e.title, e.description, e.start_time, e.end_time, e.location, e.is_published, e.max_registrations, e.registration_cancellation_cutoff
             ORDER BY e.start_time
+            LIMIT 500
         """
         results = execute_query(query)
         events = []

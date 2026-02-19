@@ -63,10 +63,34 @@ def get_allowed_tenant_slugs(user_id: Optional[str]) -> List[str]:
     return allowed if allowed else [tenants[0]["slug"]]
 
 
+def resolve_tenant_by_email(email: str) -> Optional[dict]:
+    """
+    Resolve which tenant a user belongs to by email (for login/auto-link).
+    Convention: bhis_* or *@* with local part containing 'bhis' -> demo-bhis; else demo-circle.
+    """
+    if not email:
+        return None
+    tenants = get_all_tenants()
+    if not tenants:
+        return None
+    local = (email.split("@")[0] or "").strip().lower()
+    # BHIS demo users: bhis_parent, bhis_student, bhis_admin, or any local part containing 'bhis'
+    if local.startswith("bhis_") or "bhis" in local:
+        for t in tenants:
+            if t.get("slug") == "demo-bhis":
+                return t
+    # Default to Demo-Circle (internal tenant)
+    for t in tenants:
+        if t.get("slug") == "demo-circle" or t.get("is_internal"):
+            return t
+    return tenants[0] if tenants else None
+
+
 def resolve_tenant(x_tenant_slug: Optional[str], user_id: Optional[str]) -> Optional[dict]:
     """
     Resolve tenant for request. Returns { id, name, slug, schema_app, schema_auth, is_internal, settings }
     or None to use default (campus_circle).
+    Super admin with no X-Tenant gets Demo-Circle as default.
     """
     tenants = get_all_tenants()
     if not tenants:
@@ -80,7 +104,13 @@ def resolve_tenant(x_tenant_slug: Optional[str], user_id: Optional[str]) -> Opti
         for t in tenants:
             if t["slug"] == slug:
                 return t
-    # Default: first allowed tenant
+    # Default: for super admin prefer Demo-Circle (internal/default tenant)
+    if user_id and is_super_admin(user_id):
+        for t in tenants:
+            if t.get("slug") == "demo-circle" or t.get("is_internal"):
+                if t["slug"] in allowed:
+                    return t
+    # Otherwise first allowed tenant
     for t in tenants:
         if t["slug"] in allowed:
             return t

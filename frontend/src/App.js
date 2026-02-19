@@ -1,56 +1,64 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { getApiUrl, getApiHeaders } from './api/client';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import LoginPage from './features/auth/components/LoginPage';
 import ParentRegisterPage from './features/auth/components/ParentRegisterPage';
 import StudentRegisterPage from './features/auth/components/StudentRegisterPage';
-import ParentDashboard from './features/dashboard/components/ParentDashboard';
-import StudentDashboard from './features/dashboard/components/StudentDashboard';
-import AdminDashboard from './features/dashboard/components/AdminDashboard';
-import MyEventsPage from './features/dashboard/components/MyEventsPage';
 import CurrentEventsPage from './features/events/components/CurrentEventsPage';
 import EventDetailPage from './features/events/components/EventDetailPage';
 import ProfilePage from './features/profile/components/ProfilePage';
 import SessionNotifier from './features/auth/components/SessionNotifier';
+import AuthRedirect from './components/AuthRedirect';
 import HelpPage from './features/auth/components/HelpPage';
 import ContactPage from './features/contact/components/ContactPage';
 import AboutPage from './components/AboutPage';
-import ManageUsers from './features/admin/components/ManageUsers';
-import ManageEvents from './features/admin/components/ManageEvents';
-import ManageSchools from './features/admin/components/ManageSchools';
-import ContactSubmissions from './features/admin/components/ContactSubmissions';
-import ManageTenants from './features/admin/components/ManageTenants';
 import { fetchEvents } from './features/events/eventsSlice';
-import { setCredentials, logout } from './features/auth/authSlice';
-import { fetchProfile } from './features/dashboard/dashboardSlice';
+import { bootstrapAuth } from './features/auth/authSlice';
+import { setProfile } from './features/dashboard/dashboardSlice';
 
-// Protected Route Component
+const ParentDashboard = lazy(() => import('./features/dashboard/components/ParentDashboard'));
+const StudentDashboard = lazy(() => import('./features/dashboard/components/StudentDashboard'));
+const AdminDashboard = lazy(() => import('./features/dashboard/components/AdminDashboard'));
+const MyEventsPage = lazy(() => import('./features/dashboard/components/MyEventsPage'));
+const ManageUsers = lazy(() => import('./features/admin/components/ManageUsers'));
+const ManageEvents = lazy(() => import('./features/admin/components/ManageEvents'));
+const ManageSchools = lazy(() => import('./features/admin/components/ManageSchools'));
+const ContactSubmissions = lazy(() => import('./features/admin/components/ContactSubmissions'));
+const ManageTenants = lazy(() => import('./features/admin/components/ManageTenants'));
+
+const PageFallback = () => (
+  <div className="flex flex-col items-center justify-center flex-1 py-24" aria-busy="true">
+    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600" aria-hidden />
+    <p className="mt-4 text-gray-600">Loading…</p>
+  </div>
+);
+
+// Protected Route: wait for auth bootstrap so we don't flash Login then content
 const ProtectedRoute = ({ children }) => {
-  const { token } = useSelector((state) => state.auth);
-  return token ? children : <Navigate to="/login" replace />;
+  const { token, authCheckComplete, user } = useSelector((state) => state.auth);
+  if (token && !authCheckComplete) {
+    return (
+      <div className="flex flex-col items-center justify-center flex-1 py-24">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600" aria-hidden />
+        <p className="mt-4 text-gray-600">Loading…</p>
+      </div>
+    );
+  }
+  return token && user ? children : <Navigate to="/login" replace />;
 };
 
 function HomePage() {
   const dispatch = useDispatch();
   const { events, loading: eventsLoading } = useSelector((state) => state.events);
-  const { token, user } = useSelector((state) => state.auth);
+  const { user, token, currentTenant } = useSelector((state) => state.auth);
   const { profile } = useSelector((state) => state.dashboard);
   const isAdmin = user?.role === 'admin' || profile?.role === 'admin';
 
   useEffect(() => {
-    if (token && !profile) {
-      dispatch(fetchProfile());
-    }
-  }, [token, profile, dispatch]);
-
-  useEffect(() => {
-    if (events.length === 0 && !eventsLoading) {
-      dispatch(fetchEvents());
-    }
-  }, [dispatch, events.length, eventsLoading]);
+    dispatch(fetchEvents());
+  }, [dispatch, currentTenant?.slug]);
 
   // Only use real events from API, no mock events
   const currentEvents = events;
@@ -191,42 +199,27 @@ function HomePage() {
 
 function App() {
   const dispatch = useDispatch();
-  const { token } = useSelector((state) => state.auth);
+  const { token, authCheckComplete } = useSelector((state) => state.auth);
 
-  // Validate stored token on load only when we have token but no user (e.g. page refresh)
-  const { user } = useSelector((state) => state.auth);
+  // Single auth bootstrap when token exists: load user + profile + tenant once; then set profile in dashboard
   useEffect(() => {
-    if (!token || user) return;
-    fetch(getApiUrl('/users/me'), {
-      headers: getApiHeaders(token),
-    })
-      .then((response) => {
-        if (response.ok) return response.json();
-        dispatch(logout());
-        return null;
-      })
-      .then((profile) => {
-        if (profile) {
-          dispatch(setCredentials({
-            user: {
-              id: profile.id,
-              email: profile.email,
-              name: profile.full_name,
-              role: profile.role,
-            },
-            token,
-          }));
+    if (!token || authCheckComplete) return;
+    dispatch(bootstrapAuth())
+      .then((result) => {
+        if (result.meta?.requestStatus === 'fulfilled' && result.payload?.profile) {
+          dispatch(setProfile(result.payload.profile));
         }
-      })
-      .catch(() => dispatch(logout()));
-  }, [dispatch, token, user]);
+      });
+  }, [dispatch, token, authCheckComplete]);
 
   return (
     <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <AuthRedirect />
       <div className="App min-h-screen bg-gray-50 flex flex-col">
         <Navbar />
         <SessionNotifier />
         <main className="flex-1 w-full flex flex-col">
+        <Suspense fallback={<PageFallback />}>
         <Routes>
             <Route path="/" element={<HomePage />} />
           <Route path="/login" element={<LoginPage />} />
@@ -328,6 +321,7 @@ function App() {
           <Route path="/security" element={<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full"><h1 className="text-3xl font-bold mb-4">Security</h1><p className="text-gray-600">Information about our security measures.</p></div>} />
           <Route path="/terms" element={<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full"><h1 className="text-3xl font-bold mb-4">Terms of Service</h1><p className="text-gray-600">Terms and conditions for using CampusCircle.</p></div>} />
         </Routes>
+        </Suspense>
         </main>
         <Footer />
       </div>

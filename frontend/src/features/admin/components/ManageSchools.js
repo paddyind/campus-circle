@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { getApiUrl, getApiHeaders } from '../../../api/client';
 
 const ManageSchools = () => {
-  const { token } = useSelector((state) => state.auth);
+  const { token, currentTenant } = useSelector((state) => state.auth);
   const [schools, setSchools] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -13,7 +13,7 @@ const ManageSchools = () => {
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState(null);
 
-  const fetchSchools = async () => {
+  const fetchSchools = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -28,11 +28,11 @@ const ManageSchools = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
 
   useEffect(() => {
     fetchSchools();
-  }, []);
+  }, [fetchSchools, currentTenant?.slug]);
 
   const openCreate = () => {
     setForm({ name: '', address: '', phone: '', email: '', website: '' });
