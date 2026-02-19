@@ -64,5 +64,6 @@ jobs:
         npm test -- --watchAll=false
 
     - name: Build production images
+      working-directory: ${{ github.workspace }}
       run: |
         docker compose -f infra/docker-compose.yml --project-directory . build
