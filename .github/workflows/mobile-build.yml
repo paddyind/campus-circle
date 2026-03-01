@@ -42,7 +42,11 @@ jobs:
 
       - name: Docker Compose config
         run: |
-          test -f .env || cp .env.example .env 2>/dev/null || true
+          if [ ! -f .env ]; then
+            for key in SUPABASE_URL SUPABASE_ANON_KEY SUPABASE_SERVICE_ROLE_KEY SUPABASE_DB_HOST SUPABASE_DB_PORT SUPABASE_DB_NAME SUPABASE_DB_USER SUPABASE_DB_PASSWORD; do
+              echo "${key}=placeholder" >> .env
+            done
+          fi
           docker compose -f infra/docker-compose.yml --project-directory . --env-file .env config
 
   build-android:
