@@ -273,7 +273,7 @@ uvicorn app.main:app --reload
 
 ### Applying code changes (restart / rebuild)
 
-Code changes **do not apply** until the running services are restarted or rebuilt.
+Code changes **do not apply** until the running services are restarted or rebuilt. If you pulled changes to `frontend/package.json` or `package-lock.json`, run `npm install --legacy-peer-deps` in `frontend/` before building.
 
 - **Running backend and frontend locally**  
   Stop the running processes (Ctrl+C), then start them again:

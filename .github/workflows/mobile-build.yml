@@ -15,8 +15,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set repo root (works for GITHUB_WORKSPACE or .../repo/repo nesting)
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          found="$(find . -path '*/infra/docker-compose.yml' -print -quit 2>/dev/null)"
+          [ -n "$found" ] || { echo "ERROR: infra/docker-compose.yml not found"; exit 1; }
+          REPO_ROOT="$(cd "$(dirname "$(dirname "$found")")" && pwd)"
+          echo "REPO_ROOT=$REPO_ROOT" >> $GITHUB_ENV
+          echo "Using REPO_ROOT=$REPO_ROOT"
+
       - name: Create minimal .env
         run: |
+          cd "$REPO_ROOT"
           cp .env.example .env 2>/dev/null || true
           for key in SUPABASE_URL SUPABASE_ANON_KEY SUPABASE_SERVICE_ROLE_KEY SUPABASE_DB_HOST SUPABASE_DB_PORT SUPABASE_DB_NAME SUPABASE_DB_USER SUPABASE_DB_PASSWORD; do
             grep -q "^${key}=" .env 2>/dev/null || echo "${key}=placeholder" >> .env
@@ -24,31 +34,31 @@ jobs:
 
       - name: Sanity tests
         run: |
+          cd "$REPO_ROOT"
           chmod +x infra/scripts/sanity-test.sh
           ./infra/scripts/sanity-test.sh
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install frontend deps and test
         run: |
-          cd frontend
+          cd "$REPO_ROOT/frontend"
           npm install
           npm test -- --watchAll=false
 
       - name: Docker Compose config
         run: |
-          PROJECT_ROOT="$(cd "$GITHUB_WORKSPACE" && pwd)"
-          ENV_FILE="$(dirname "$PROJECT_ROOT")/.env"
-          : > "$ENV_FILE"
+          cd "$REPO_ROOT"
+          : > .env
           for key in SUPABASE_URL SUPABASE_ANON_KEY SUPABASE_SERVICE_ROLE_KEY SUPABASE_DB_HOST SUPABASE_DB_PORT SUPABASE_DB_NAME SUPABASE_DB_USER SUPABASE_DB_PASSWORD; do
-            echo "${key}=placeholder" >> "$ENV_FILE"
+            echo "${key}=placeholder" >> .env
           done
-          docker compose -f "$GITHUB_WORKSPACE/infra/docker-compose.yml" --project-directory "$GITHUB_WORKSPACE" --env-file "$ENV_FILE" config
+          docker compose -f "$REPO_ROOT/infra/docker-compose.yml" --project-directory "$REPO_ROOT" --env-file "$REPO_ROOT/.env" config
 
   build-android:
     name: Android APK
@@ -57,19 +67,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set repo root
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          found="$(find . -path '*/infra/docker-compose.yml' -print -quit 2>/dev/null)"
+          [ -n "$found" ] || { echo "ERROR: infra/docker-compose.yml not found"; exit 1; }
+          REPO_ROOT="$(cd "$(dirname "$(dirname "$found")")" && pwd)"
+          echo "REPO_ROOT=$REPO_ROOT" >> $GITHUB_ENV
+          echo "Using REPO_ROOT=$REPO_ROOT"
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install frontend dependencies
-        run: cd frontend && npm install
+        run: cd "$REPO_ROOT/frontend" && npm install
 
       - name: Build web and sync Capacitor
         run: |
-          cd frontend
+          cd "$REPO_ROOT/frontend"
           REACT_APP_API_URL="${REACT_APP_API_URL:-https://your-api.com/api}" npm run cap:sync
         env:
           REACT_APP_API_URL: ${{ vars.REACT_APP_API_URL || 'https://your-api.com/api' }}
@@ -87,14 +106,14 @@ jobs:
 
       - name: Build debug APK
         run: |
-          cd frontend/android
+          cd "$REPO_ROOT/frontend/android"
           ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug-apk
-          path: frontend/android/app/build/outputs/apk/debug/app-debug.apk
+          path: ${{ env.REPO_ROOT }}/frontend/android/app/build/outputs/apk/debug/app-debug.apk
 
   build-ios:
     name: iOS (Simulator .app)
@@ -103,26 +122,35 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set repo root
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          found="$(find . -path '*/infra/docker-compose.yml' -print -quit 2>/dev/null)"
+          [ -n "$found" ] || { echo "ERROR: infra/docker-compose.yml not found"; exit 1; }
+          REPO_ROOT="$(cd "$(dirname "$(dirname "$found")")" && pwd)"
+          echo "REPO_ROOT=$REPO_ROOT" >> $GITHUB_ENV
+          echo "Using REPO_ROOT=$REPO_ROOT"
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install frontend dependencies
-        run: cd frontend && npm install
+        run: cd "$REPO_ROOT/frontend" && npm install
 
       - name: Build web and sync Capacitor
         run: |
-          cd frontend
+          cd "$REPO_ROOT/frontend"
           REACT_APP_API_URL="${REACT_APP_API_URL:-https://your-api.com/api}" npm run cap:sync
         env:
           REACT_APP_API_URL: ${{ vars.REACT_APP_API_URL || 'https://your-api.com/api' }}
 
       - name: Build for iOS Simulator
         run: |
-          cd frontend/ios/App
+          cd "$REPO_ROOT/frontend/ios/App"
           xcodebuild -project App.xcodeproj -scheme App \
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
@@ -134,4 +162,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: app-ios-simulator
-          path: frontend/ios/App/build/Build/Products/Debug-iphonesimulator/App.app
+          path: ${{ env.REPO_ROOT }}/frontend/ios/App/build/Build/Products/Debug-iphonesimulator/App.app

@@ -8,13 +8,19 @@
     "@capacitor/ios": "^8.1.0",
     "@reduxjs/toolkit": "^1.9.5",
     "@types/react": "^18.2.0",
-    "bootstrap": "^5.3.1",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
+    "bootstrap": "^5.3.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "react-redux": "^8.1.2",
-    "react-router-dom": "^6.15.0",
+    "react-router-dom": "^6.28.0",
     "react-scripts": "5.0.1",
-    "tailwindcss": "^3.3.3"
+    "tailwindcss": "^3.4.15"
+  },
+  "overrides": {
+    "nth-check": "^2.1.1",
+    "postcss": "^8.4.38",
+    "glob": "^9.3.5",
+    "rimraf": "^5.0.5"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -29,22 +35,11 @@
     "cap:ios": "npx cap open ios"
   },
   "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
+    "extends": ["react-app", "react-app/jest"]
   },
   "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
+    "production": [">0.2%", "not dead", "not op_mini all"],
+    "development": ["last 1 chrome version", "last 1 firefox version", "last 1 safari version"]
   },
   "devDependencies": {
     "@capacitor/cli": "^8.1.0",

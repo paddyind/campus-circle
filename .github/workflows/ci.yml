@@ -18,8 +18,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set repo root (works for GITHUB_WORKSPACE or .../repo/repo nesting)
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          found="$(find . -path '*/infra/docker-compose.yml' -print -quit 2>/dev/null)"
+          [ -n "$found" ] || { echo "ERROR: infra/docker-compose.yml not found"; exit 1; }
+          REPO_ROOT="$(cd "$(dirname "$(dirname "$found")")" && pwd)"
+          echo "REPO_ROOT=$REPO_ROOT" >> $GITHUB_ENV
+          echo "Using REPO_ROOT=$REPO_ROOT"
+
       - name: Create minimal .env for sanity tests
         run: |
+          cd "$REPO_ROOT"
           cp .env.example .env 2>/dev/null || true
           for key in SUPABASE_URL SUPABASE_ANON_KEY SUPABASE_SERVICE_ROLE_KEY SUPABASE_DB_HOST SUPABASE_DB_PORT SUPABASE_DB_NAME SUPABASE_DB_USER SUPABASE_DB_PASSWORD; do
             grep -q "^${key}=" .env 2>/dev/null || echo "${key}=placeholder" >> .env
@@ -32,17 +42,20 @@ jobs:
 
       - name: Install Python dependencies
         run: |
+          cd "$REPO_ROOT"
           python -m pip install --upgrade pip
           pip install -r backend/requirements.txt
 
       - name: Verify DB migrations and scripts
         run: |
+          cd "$REPO_ROOT"
           test -f database/001_schema.sql && test -f database/005_super_admins.sql || exit 1
           python infra/scripts/db.py 2>&1 | grep -q "migrate\|setup" || exit 1
           echo "Migrations 001-005 and db.py commands OK"
 
       - name: Run sanity tests
         run: |
+          cd "$REPO_ROOT"
           chmod +x infra/scripts/sanity-test.sh
           ./infra/scripts/sanity-test.sh
 
@@ -59,36 +72,33 @@ jobs:
 
       - name: Install Node.js dependencies
         run: |
-          cd frontend
+          cd "$REPO_ROOT/frontend"
           npm install --legacy-peer-deps
 
       - name: Run Node.js tests
         run: |
-          cd frontend
+          cd "$REPO_ROOT/frontend"
           npm test -- --watchAll=false
 
       - name: Verify workspace for Docker build
         run: |
-          echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
-          ls -la "$GITHUB_WORKSPACE"
-          test -d "$GITHUB_WORKSPACE/infra" || (echo "ERROR: infra directory missing"; exit 1)
-          ls -la "$GITHUB_WORKSPACE/infra"
+          echo "REPO_ROOT=$REPO_ROOT"
+          ls -la "$REPO_ROOT"
+          test -d "$REPO_ROOT/infra" || (echo "ERROR: infra directory missing"; exit 1)
+          ls -la "$REPO_ROOT/infra"
 
       - name: Docker Compose config
         run: |
-          # GITHUB_WORKSPACE can be .../campus-circle/campus-circle; compose resolves backend env_file ../.env from project dir = parent/.env
-          PROJECT_ROOT="$(cd "$GITHUB_WORKSPACE" && pwd)"
-          PARENT_DIR="$(dirname "$PROJECT_ROOT")"
-          ENV_FILE="$PARENT_DIR/.env"
-          : > "$ENV_FILE"
+          cd "$REPO_ROOT"
+          : > .env
           for key in SUPABASE_URL SUPABASE_ANON_KEY SUPABASE_SERVICE_ROLE_KEY SUPABASE_DB_HOST SUPABASE_DB_PORT SUPABASE_DB_NAME SUPABASE_DB_USER SUPABASE_DB_PASSWORD; do
-            echo "${key}=placeholder" >> "$ENV_FILE"
+            echo "${key}=placeholder" >> .env
           done
-          docker compose -f "$GITHUB_WORKSPACE/infra/docker-compose.yml" --project-directory "$GITHUB_WORKSPACE" --env-file "$ENV_FILE" config
+          docker compose -f "$REPO_ROOT/infra/docker-compose.yml" --project-directory "$REPO_ROOT" --env-file "$REPO_ROOT/.env" config
 
       - name: Build production images
         run: |
-          docker compose -f "$GITHUB_WORKSPACE/infra/docker-compose.yml" --project-directory "$GITHUB_WORKSPACE" build
+          docker compose -f "$REPO_ROOT/infra/docker-compose.yml" --project-directory "$REPO_ROOT" build
 
   build-android:
     name: Android APK
@@ -96,6 +106,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set repo root
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          found="$(find . -path '*/infra/docker-compose.yml' -print -quit 2>/dev/null)"
+          [ -n "$found" ] || { echo "ERROR: infra/docker-compose.yml not found"; exit 1; }
+          REPO_ROOT="$(cd "$(dirname "$(dirname "$found")")" && pwd)"
+          echo "REPO_ROOT=$REPO_ROOT" >> $GITHUB_ENV
+          echo "Using REPO_ROOT=$REPO_ROOT"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -105,11 +124,11 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install frontend dependencies
-        run: cd frontend && npm install
+        run: cd "$REPO_ROOT/frontend" && npm install
 
       - name: Build web and sync Capacitor
         run: |
-          cd frontend
+          cd "$REPO_ROOT/frontend"
           REACT_APP_API_URL="${REACT_APP_API_URL:-https://your-api.com/api}" npm run cap:sync
 
       - name: Set up JDK 17
@@ -125,14 +144,14 @@ jobs:
 
       - name: Build debug APK
         run: |
-          cd frontend/android
+          cd "$REPO_ROOT/frontend/android"
           ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug-apk
-          path: frontend/android/app/build/outputs/apk/debug/app-debug.apk
+          path: ${{ env.REPO_ROOT }}/frontend/android/app/build/outputs/apk/debug/app-debug.apk
 
   build-ios:
     name: iOS (Simulator .app)
@@ -140,6 +159,15 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set repo root
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          found="$(find . -path '*/infra/docker-compose.yml' -print -quit 2>/dev/null)"
+          [ -n "$found" ] || { echo "ERROR: infra/docker-compose.yml not found"; exit 1; }
+          REPO_ROOT="$(cd "$(dirname "$(dirname "$found")")" && pwd)"
+          echo "REPO_ROOT=$REPO_ROOT" >> $GITHUB_ENV
+          echo "Using REPO_ROOT=$REPO_ROOT"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -149,16 +177,16 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install frontend dependencies
-        run: cd frontend && npm install
+        run: cd "$REPO_ROOT/frontend" && npm install
 
       - name: Build web and sync Capacitor
         run: |
-          cd frontend
+          cd "$REPO_ROOT/frontend"
           REACT_APP_API_URL="${REACT_APP_API_URL:-https://your-api.com/api}" npm run cap:sync
 
       - name: Build for iOS Simulator
         run: |
-          cd frontend/ios/App
+          cd "$REPO_ROOT/frontend/ios/App"
           xcodebuild -project App.xcodeproj -scheme App \
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
@@ -170,4 +198,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: app-ios-simulator
-          path: frontend/ios/App/build/Build/Products/Debug-iphonesimulator/App.app
+          path: ${{ env.REPO_ROOT }}/frontend/ios/App/build/Build/Products/Debug-iphonesimulator/App.app
