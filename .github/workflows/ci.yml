@@ -132,11 +132,11 @@ jobs:
           cd "$REPO_ROOT/frontend"
           REACT_APP_API_URL="${REACT_APP_API_URL:-https://your-api.com/api}" npm run cap:sync
 
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
