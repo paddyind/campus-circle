@@ -1,5 +1,5 @@
 # Validate + build Android APK and iOS app. Use this before releasing any version.
-# Trigger: push to main, or manually via Actions → "Validate and build mobile" → Run workflow.
+# Trigger: manual only (Actions → "Validate and build mobile" → Run workflow). On push to main, the main CI workflow runs instead (one run per push).
 # Artifacts: APK (install on device or BrowserStack/LambdaTest), iOS .app (simulator) or IPA if signing is configured.
 # Install: uses "npm ci || npm install" so CI passes when package-lock.json is out of sync; run "npm install" in frontend/ and commit the lock file to restore strict npm ci.
 
@@ -7,8 +7,6 @@ name: Validate and build mobile
 
 on:
   workflow_dispatch: {}
-  push:
-    branches: [ main ]
 
 jobs:
   validate:
@@ -43,7 +41,9 @@ jobs:
           npm test -- --watchAll=false
 
       - name: Docker Compose config
-        run: docker compose -f infra/docker-compose.yml --project-directory . config
+        run: |
+          test -f .env || cp .env.example .env 2>/dev/null || true
+          docker compose -f infra/docker-compose.yml --project-directory . --env-file .env config
 
   build-android:
     name: Android APK

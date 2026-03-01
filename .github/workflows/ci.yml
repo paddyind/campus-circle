@@ -1,4 +1,5 @@
 # .github/workflows/ci.yml
+# Single pipeline on push/PR: validate + Docker build, then Android APK and iOS app (dependent). One run per push.
 name: CI
 
 on:
@@ -7,70 +8,159 @@ on:
   pull_request:
     branches: [ main ]
 
+env:
+  REACT_APP_API_URL: ${{ vars.REACT_APP_API_URL || 'https://your-api.com/api' }}
+
 jobs:
   build-and-test:
+    name: Validate & Docker
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-    - name: Create minimal .env for sanity tests
-      run: |
-        cp .env.example .env 2>/dev/null || true
-        for key in SUPABASE_URL SUPABASE_ANON_KEY SUPABASE_SERVICE_ROLE_KEY SUPABASE_DB_HOST SUPABASE_DB_PORT SUPABASE_DB_NAME SUPABASE_DB_USER SUPABASE_DB_PASSWORD; do
-          grep -q "^${key}=" .env 2>/dev/null || echo "${key}=placeholder" >> .env
-        done
+      - name: Create minimal .env for sanity tests
+        run: |
+          cp .env.example .env 2>/dev/null || true
+          for key in SUPABASE_URL SUPABASE_ANON_KEY SUPABASE_SERVICE_ROLE_KEY SUPABASE_DB_HOST SUPABASE_DB_PORT SUPABASE_DB_NAME SUPABASE_DB_USER SUPABASE_DB_PASSWORD; do
+            grep -q "^${key}=" .env 2>/dev/null || echo "${key}=placeholder" >> .env
+          done
 
-    - name: Set up Python
-      uses: actions/setup-python@v3
-      with:
-        python-version: '3.10'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
 
-    - name: Install Python dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r backend/requirements.txt
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
 
-    - name: Verify DB migrations and scripts
-      run: |
-        test -f database/001_schema.sql && test -f database/005_super_admins.sql || exit 1
-        python infra/scripts/db.py 2>&1 | grep -q "migrate\|setup" || exit 1
-        echo "Migrations 001-005 and db.py commands OK"
+      - name: Verify DB migrations and scripts
+        run: |
+          test -f database/001_schema.sql && test -f database/005_super_admins.sql || exit 1
+          python infra/scripts/db.py 2>&1 | grep -q "migrate\|setup" || exit 1
+          echo "Migrations 001-005 and db.py commands OK"
 
-    - name: Run sanity tests
-      run: |
-        chmod +x infra/scripts/sanity-test.sh
-        ./infra/scripts/sanity-test.sh
+      - name: Run sanity tests
+        run: |
+          chmod +x infra/scripts/sanity-test.sh
+          ./infra/scripts/sanity-test.sh
 
-    - name: Run Python tests
-      run: |
-        # Placeholder for running Python tests
-        echo "Running Python tests..."
+      - name: Run Python tests
+        run: |
+          echo "Running Python tests..."
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: '18'
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
 
-    - name: Install Node.js dependencies
-      run: |
-        cd frontend
-        npm install --legacy-peer-deps
+      - name: Install Node.js dependencies
+        run: |
+          cd frontend
+          npm ci || npm install --legacy-peer-deps
 
-    - name: Run Node.js tests
-      run: |
-        # Placeholder for running Node.js tests
-        cd frontend
-        npm test -- --watchAll=false
+      - name: Run Node.js tests
+        run: |
+          cd frontend
+          npm test -- --watchAll=false
 
-    - name: Verify workspace for Docker build
-      run: |
-        echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
-        ls -la "$GITHUB_WORKSPACE"
-        test -d "$GITHUB_WORKSPACE/infra" || (echo "ERROR: infra directory missing"; exit 1)
-        ls -la "$GITHUB_WORKSPACE/infra"
+      - name: Verify workspace for Docker build
+        run: |
+          echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
+          ls -la "$GITHUB_WORKSPACE"
+          test -d "$GITHUB_WORKSPACE/infra" || (echo "ERROR: infra directory missing"; exit 1)
+          ls -la "$GITHUB_WORKSPACE/infra"
 
-    - name: Build production images
-      run: |
-        cd "$GITHUB_WORKSPACE"
-        docker compose -f infra/docker-compose.yml --project-directory . build
+      - name: Docker Compose config
+        run: |
+          test -f .env || cp .env.example .env 2>/dev/null || true
+          docker compose -f "$GITHUB_WORKSPACE/infra/docker-compose.yml" --project-directory "$GITHUB_WORKSPACE" --env-file "$GITHUB_WORKSPACE/.env" config
+
+      - name: Build production images
+        run: |
+          docker compose -f "$GITHUB_WORKSPACE/infra/docker-compose.yml" --project-directory "$GITHUB_WORKSPACE" build
+
+  build-android:
+    name: Android APK
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: cd frontend && (npm ci || npm install)
+
+      - name: Build web and sync Capacitor
+        run: |
+          cd frontend
+          REACT_APP_API_URL="${REACT_APP_API_URL:-https://your-api.com/api}" npm run cap:sync
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'tools platform-tools platforms;android-36 build-tools;35.0.0'
+
+      - name: Build debug APK
+        run: |
+          cd frontend/android
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: frontend/android/app/build/outputs/apk/debug/app-debug.apk
+
+  build-ios:
+    name: iOS (Simulator .app)
+    needs: build-and-test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: cd frontend && (npm ci || npm install)
+
+      - name: Build web and sync Capacitor
+        run: |
+          cd frontend
+          REACT_APP_API_URL="${REACT_APP_API_URL:-https://your-api.com/api}" npm run cap:sync
+
+      - name: Build for iOS Simulator
+        run: |
+          cd frontend/ios/App
+          xcodebuild -project App.xcodeproj -scheme App \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build \
+            -configuration Debug \
+            build CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO
+
+      - name: Upload iOS Simulator app
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-ios-simulator
+          path: frontend/ios/App/build/Build/Products/Debug-iphonesimulator/App.app

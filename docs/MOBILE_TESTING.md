@@ -98,16 +98,18 @@ For **store builds**, use your deployed backend URL (HTTPS), not localhost or 10
 
 ## Validate and build in CI/CD (no extra tools)
 
-One pipeline validates and builds both Android and iOS so you can gate releases and reuse it anywhere.
+**One pipeline per push** — no duplicate runs. The main **CI** workflow runs on every push/PR to `main` and produces all artifacts.
 
-- **Workflow:** `.github/workflows/mobile-build.yml` — **Validate and build mobile**
-- **Runs on:** Push to `main`, or manually: **Actions → Validate and build mobile → Run workflow**
-- **Steps:**
-  1. **Validate** — Sanity tests, frontend unit tests, Docker Compose config. Must pass before any build.
-  2. **Android APK** — Builds a debug APK; uploads artifact `app-debug-apk`.
-  3. **iOS** — Builds the app for the iOS Simulator; uploads artifact `app-ios-simulator` (`.app` bundle).
+- **Workflow:** `.github/workflows/ci.yml` — **CI**
+- **Runs on:** Push and pull_request to `main`
+- **Jobs (with dependency):**
+  1. **Validate & Docker** — Sanity tests, Python/Node tests, Docker Compose config, Docker image build. Must pass first.
+  2. **Android APK** — Runs only if job 1 passes; uploads artifact `app-debug-apk`.
+  3. **iOS (Simulator .app)** — Runs only if job 1 passes; uploads artifact `app-ios-simulator`.
 
-Before releasing a version, run this workflow (or let it run on push to `main`). If validate or either build fails, fix before release. Set the repo variable **`REACT_APP_API_URL`** (e.g. to your deployed API) so the built app uses the correct backend.
+So one run per push: validate and Docker build first, then Android and iOS build in parallel. Set the repo variable **`REACT_APP_API_URL`** so the built app uses the correct backend.
+
+**Optional:** **Validate and build mobile** (`.github/workflows/mobile-build.yml`) runs only when you trigger it manually (Actions → Validate and build mobile → Run workflow). Use it when you want mobile artifacts without running the full CI.
 
 ---
 
