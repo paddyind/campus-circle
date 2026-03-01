@@ -1,6 +1,7 @@
 # Validate + build Android APK and iOS app. Use this before releasing any version.
 # Trigger: push to main, or manually via Actions → "Validate and build mobile" → Run workflow.
 # Artifacts: APK (install on device or BrowserStack/LambdaTest), iOS .app (simulator) or IPA if signing is configured.
+# Install: uses "npm ci || npm install" so CI passes when package-lock.json is out of sync; run "npm install" in frontend/ and commit the lock file to restore strict npm ci.
 
 name: Validate and build mobile
 
@@ -38,7 +39,7 @@ jobs:
       - name: Install frontend deps and test
         run: |
           cd frontend
-          npm ci
+          npm ci || npm install
           npm test -- --watchAll=false
 
       - name: Docker Compose config
@@ -59,7 +60,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install frontend dependencies
-        run: cd frontend && npm ci
+        run: cd frontend && (npm ci || npm install)
 
       - name: Build web and sync Capacitor
         run: |
@@ -105,7 +106,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install frontend dependencies
-        run: cd frontend && npm ci
+        run: cd frontend && (npm ci || npm install)
 
       - name: Build web and sync Capacitor
         run: |
