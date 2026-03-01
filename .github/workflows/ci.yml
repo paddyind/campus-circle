@@ -74,6 +74,7 @@ jobs:
         run: |
           cd "$REPO_ROOT/frontend"
           npm install --legacy-peer-deps
+          npm audit fix --no-fund --no-audit || true
 
       - name: Run Node.js tests
         run: |

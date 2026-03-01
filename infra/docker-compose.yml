@@ -45,8 +45,9 @@ services:
       dockerfile: infra/Dockerfile.backend
     ports:
       - "8000:8000"
+    # .env path is relative to --project-directory (repo root); always run compose with --project-directory set to repo root
     env_file:
-      - ../.env
+      - .env
     environment:
       - APP_ENV=development
       - SUPABASE_URL=${SUPABASE_URL}

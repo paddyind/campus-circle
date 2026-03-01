@@ -92,10 +92,10 @@ run_compose() {
     cd "$PROJECT_ROOT"
     local env_file="$PROJECT_ROOT/.env"
     if [ -z "$svc" ]; then
-        docker-compose --project-name campus-circle --env-file "$env_file" -f "$COMPOSE_FILE" $cmd
+        docker-compose --project-name campus-circle --project-directory "$PROJECT_ROOT" --env-file "$env_file" -f "$COMPOSE_FILE" $cmd
     else
         validate_service "$svc"
-        docker-compose --project-name campus-circle --env-file "$env_file" -f "$COMPOSE_FILE" $cmd "$svc"
+        docker-compose --project-name campus-circle --project-directory "$PROJECT_ROOT" --env-file "$env_file" -f "$COMPOSE_FILE" $cmd "$svc"
     fi
 }
 
@@ -110,7 +110,7 @@ case "${1:-}" in
             svc=$(resolve_service "$2")
             validate_service "$svc"
             if [ "$svc" = "db" ]; then
-                cd "$PROJECT_ROOT" && docker-compose --project-name campus-circle --env-file "$PROJECT_ROOT/.env" -f "$COMPOSE_FILE" --profile local-db up -d db
+                cd "$PROJECT_ROOT" && docker-compose --project-name campus-circle --project-directory "$PROJECT_ROOT" --env-file "$PROJECT_ROOT/.env" -f "$COMPOSE_FILE" --profile local-db up -d db
                 echo -e "${GREEN}✅ Local Postgres started. Set SUPABASE_DB_HOST=db in .env to use it.${NC}"
             else
                 run_compose "up -d" "$svc"
@@ -121,9 +121,9 @@ case "${1:-}" in
         check_env
         echo -e "${BLUE}Stopping any existing containers...${NC}"
         cd "$PROJECT_ROOT"
-        docker-compose --project-name campus-circle --env-file "$PROJECT_ROOT/.env" -f "$COMPOSE_FILE" --profile dev --profile nginx --profile migrations --profile local-db down 2>/dev/null || true
+        docker-compose --project-name campus-circle --project-directory "$PROJECT_ROOT" --env-file "$PROJECT_ROOT/.env" -f "$COMPOSE_FILE" --profile dev --profile nginx --profile migrations --profile local-db down 2>/dev/null || true
         echo -e "${BLUE}Starting dev stack (backend + frontend)...${NC}"
-        docker-compose --project-name campus-circle --env-file "$PROJECT_ROOT/.env" -f "$COMPOSE_FILE" --profile dev up -d --build --force-recreate backend frontend
+        docker-compose --project-name campus-circle --project-directory "$PROJECT_ROOT" --env-file "$PROJECT_ROOT/.env" -f "$COMPOSE_FILE" --profile dev up -d --build --force-recreate backend frontend
         echo -e "${GREEN}✅ App running. http://localhost:3000 | Backend http://localhost:8000${NC}"
         echo -e "${YELLOW}First time? Run migrations: $0 migrate${NC}"
         ;;
@@ -131,7 +131,7 @@ case "${1:-}" in
         check_env
         cd "$PROJECT_ROOT"
         echo -e "${BLUE}Building and starting dev stack (backend + frontend)...${NC}"
-        docker-compose --project-name campus-circle --env-file "$PROJECT_ROOT/.env" -f "$COMPOSE_FILE" --profile dev up -d --build --force-recreate backend frontend
+        docker-compose --project-name campus-circle --project-directory "$PROJECT_ROOT" --env-file "$PROJECT_ROOT/.env" -f "$COMPOSE_FILE" --profile dev up -d --build --force-recreate backend frontend
         echo -e "${GREEN}✅ Dev: Frontend http://localhost:3000 | Backend http://localhost:8000 (DB = Supabase)${NC}"
         ;;
     prod)
@@ -141,21 +141,21 @@ case "${1:-}" in
             exit 1
         fi
         cd "$PROJECT_ROOT"
-        docker-compose --project-name campus-circle --env-file "$PROJECT_ROOT/.env" -f "$COMPOSE_FILE" --profile nginx up -d backend nginx
+        docker-compose --project-name campus-circle --project-directory "$PROJECT_ROOT" --env-file "$PROJECT_ROOT/.env" -f "$COMPOSE_FILE" --profile nginx up -d backend nginx
         echo -e "${GREEN}✅ Prod: http://localhost | Backend: http://localhost:8000 (DB = Supabase)${NC}"
         ;;
     deploy)
         check_env
         echo -e "${BLUE}Stopping all project containers...${NC}"
         cd "$PROJECT_ROOT"
-        docker-compose --project-name campus-circle --env-file "$PROJECT_ROOT/.env" -f "$COMPOSE_FILE" --profile dev --profile nginx --profile migrations --profile local-db down 2>/dev/null || true
+        docker-compose --project-name campus-circle --project-directory "$PROJECT_ROOT" --env-file "$PROJECT_ROOT/.env" -f "$COMPOSE_FILE" --profile dev --profile nginx --profile migrations --profile local-db down 2>/dev/null || true
         export REACT_APP_API_URL="${REACT_APP_API_URL:-http://localhost/api}"
         echo -e "${BLUE}Building frontend (REACT_APP_API_URL=$REACT_APP_API_URL)...${NC}"
         cd "$PROJECT_ROOT/frontend" && npm ci && npm run build && cd "$PROJECT_ROOT"
         echo -e "${BLUE}Building backend...${NC}"
         run_compose "build" "backend"
         echo -e "${BLUE}Starting backend + frontend (prod; nginx serves static build; DB = Supabase)...${NC}"
-        docker-compose --project-name campus-circle --env-file "$PROJECT_ROOT/.env" -f "$COMPOSE_FILE" --profile nginx up -d backend nginx
+        docker-compose --project-name campus-circle --project-directory "$PROJECT_ROOT" --env-file "$PROJECT_ROOT/.env" -f "$COMPOSE_FILE" --profile nginx up -d backend nginx
         echo -e "${GREEN}✅ Deployed. App: http://localhost | Backend: http://localhost:8000${NC}"
         echo -e "${YELLOW}If DB has no schema: ./infra/scripts/run.sh db migrate${NC}"
         echo -e "${YELLOW}Optional demo users + super admin: ./infra/scripts/run.sh db setup${NC}"
@@ -163,7 +163,7 @@ case "${1:-}" in
     migrate)
         check_env
         cd "$PROJECT_ROOT"
-        docker-compose --project-name campus-circle --env-file "$PROJECT_ROOT/.env" -f "$COMPOSE_FILE" --profile migrations up migrations
+        docker-compose --project-name campus-circle --project-directory "$PROJECT_ROOT" --env-file "$PROJECT_ROOT/.env" -f "$COMPOSE_FILE" --profile migrations up migrations
         echo -e "${GREEN}✅ Migrations completed${NC}"
         ;;
     stop)
@@ -171,9 +171,9 @@ case "${1:-}" in
         if [ -n "$2" ]; then
             svc=$(resolve_service "$2")
             validate_service "$svc"
-            docker-compose --project-name campus-circle --env-file "$PROJECT_ROOT/.env" -f "$COMPOSE_FILE" stop "$svc"
+            docker-compose --project-name campus-circle --project-directory "$PROJECT_ROOT" --env-file "$PROJECT_ROOT/.env" -f "$COMPOSE_FILE" stop "$svc"
         else
-            docker-compose --project-name campus-circle --env-file "$PROJECT_ROOT/.env" -f "$COMPOSE_FILE" --profile dev --profile nginx --profile migrations --profile local-db down
+            docker-compose --project-name campus-circle --project-directory "$PROJECT_ROOT" --env-file "$PROJECT_ROOT/.env" -f "$COMPOSE_FILE" --profile dev --profile nginx --profile migrations --profile local-db down
             echo -e "${GREEN}✅ All containers stopped${NC}"
         fi
         ;;
