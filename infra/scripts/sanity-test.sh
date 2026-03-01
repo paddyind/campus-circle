@@ -267,8 +267,8 @@ test_docker_compose() {
     if [ -f "$compose_file" ]; then
         log_success "Docker Compose file exists"
         
-        # Validate compose file (from PROJECT_ROOT so .env is found; use docker compose v2 or v1)
-        if (cd "$PROJECT_ROOT" && run_docker_compose -f "infra/docker-compose.yml" config) > /dev/null 2>&1; then
+        # Validate compose file: --project-directory must be repo root so env_file: .env resolves to PROJECT_ROOT/.env
+        if (cd "$PROJECT_ROOT" && run_docker_compose -f "infra/docker-compose.yml" --project-directory "$PROJECT_ROOT" config) > /dev/null 2>&1; then
             log_success "Docker Compose configuration is valid"
         else
             log_error "Docker Compose configuration is invalid"
