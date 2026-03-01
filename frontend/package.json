@@ -22,7 +22,10 @@
     "build:tailwind": "npx tailwindcss -i ./src/index.css -o ./src/styles/tailwind.css",
     "build:bootstrap": "REACT_APP_THEME=bootstrap react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "cap:sync": "npm run build && npx cap sync",
+    "cap:android": "npx cap open android",
+    "cap:ios": "npx cap open ios"
   },
   "eslintConfig": {
     "extends": [

@@ -14,7 +14,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         # Skip auth for public paths
-        public_paths = ["/", "/docs", "/openapi.json", "/redoc"]
+        public_paths = ["/", "/api", "/api/", "/docs", "/openapi.json", "/redoc"]
         # Allow GET for list and single event only (public viewing); require auth for /registrations and other sub-routes
         if request.method == "GET" and request.url.path.startswith("/api/events"):
             if "/registrations" not in request.url.path and request.url.path != "/api/events/schools/":

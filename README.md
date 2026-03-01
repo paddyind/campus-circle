@@ -168,36 +168,29 @@ curl http://localhost:8000/api/events
 
 ## 🐳 Docker Commands
 
+All from project root via **`./infra/scripts/docker-manage.sh`**:
+
 ```bash
-# Start services
-./infra/scripts/docker-manage.sh start [service]
-
-# Stop services
-./infra/scripts/docker-manage.sh stop [service]
-
-# Restart services
-./infra/scripts/docker-manage.sh restart [service]
-
-# Build images
-./infra/scripts/docker-manage.sh build [service]
-
-# View logs
-./infra/scripts/docker-manage.sh logs [service]
-
-# Check status
-./infra/scripts/docker-manage.sh status
-
-# Run migrations
-./infra/scripts/docker-manage.sh migrate
-
-# Demo/MVP: one command to run the app (dev mode)
+# Dev: build + start backend + frontend (http://localhost:3000, backend :8000)
+./infra/scripts/docker-manage.sh dev
+# Or: run (stops existing, then same as dev)
 ./infra/scripts/docker-manage.sh run
 
-# Or step by step: dev mode (frontend at http://localhost:3000)
-./infra/scripts/docker-manage.sh dev
+# Other
+./infra/scripts/docker-manage.sh start [service]   # backend only by default
+./infra/scripts/docker-manage.sh stop [service]
+./infra/scripts/docker-manage.sh build [service]
+./infra/scripts/docker-manage.sh logs [service]
+./infra/scripts/docker-manage.sh status
+./infra/scripts/docker-manage.sh migrate
+./infra/scripts/docker-manage.sh deploy           # prod: build frontend + backend, nginx
+./infra/scripts/docker-manage.sh prod             # start prod stack (needs frontend/build)
 
-# Production mode (later; nginx serving built frontend at http://localhost)
-./infra/scripts/docker-manage.sh prod
+# Mobile (run dev first so backend is up)
+./infra/scripts/docker-manage.sh android         # build web, sync Capacitor, open Android Studio
+./infra/scripts/docker-manage.sh ios             # build web, sync Capacitor, open Xcode
+# Physical device on same Wi‑Fi:
+REACT_APP_API_URL=http://YOUR_IP:8000/api ./infra/scripts/docker-manage.sh android
 ```
 
 ## 💾 Database Backup and Restore
@@ -256,6 +249,7 @@ For detailed architecture information, see [docs/ARCHITECTURE.md](docs/ARCHITECT
 - [Architecture Documentation](docs/ARCHITECTURE.md) - System architecture and design
 - [Database Schema](docs/DATABASE.md) - Database structure and schema details
 - [Tenants and Deployment](docs/TENANTS_AND_DEPLOYMENT.md) - Tenant model (Demo-Circle, baseline, new tenants), mobile app builds via Capacitor, deployment (Firebase, Cloud Run, free hosting)
+- [Mobile testing (Android / iOS)](docs/MOBILE_TESTING.md) - Local: `docker-manage.sh android` / `ios`. CI: validate + build APK & iOS (no extra tools).
 - [Scripts Documentation](infra/scripts/README.md) - Scripts for DB, Docker, setup
 - [CHANGELOG.md](CHANGELOG.md) - Version history and changes
 
@@ -287,13 +281,9 @@ Code changes **do not apply** until the running services are restarted or rebuil
   - Frontend: `cd frontend && npm start`
 
 - **Using Docker**  
-  Rebuild images and restart so containers use the new code:
-  ```bash
-  ./infra/scripts/docker-manage.sh build
-  ./infra/scripts/docker-manage.sh start    # or: docker-manage.sh dev (to include frontend)
-  ```
-  Or rebuild and start in one go:  
-  `docker-compose -f infra/docker-compose.yml --env-file .env up -d --build backend db`
+  Rebuild and recreate so containers use the new code:  
+  `./infra/scripts/docker-manage.sh dev`  
+  (This runs `up -d --build --force-recreate` for backend and frontend.)
 
 - **Database (for new columns, e.g. cancellation cutoff)**  
   Run migrations after pulling or changing schema:

@@ -1,5 +1,5 @@
 #!/bin/bash
-# docker-manage.sh - Manage Campus Circle Docker containers (run from repo root or infra/scripts)
+# docker-manage.sh - Docker + mobile: dev/prod/deploy and Android/iOS testing (run from repo root or infra/scripts)
 
 set -e
 
@@ -17,26 +17,31 @@ COMPOSE_FILE="$PROJECT_ROOT/infra/docker-compose.yml"
 SERVICES=("nginx" "frontend" "backend" "db" "migrations")
 CONTAINER_NAMES=("campus-circle-frontend" "campus-circle-frontend-dev" "campus-circle-backend" "campus-circle-db" "campus-circle-migrations")
 
+# API URL for mobile: Android emulator sees host as 10.0.2.2; iOS Simulator and physical devices use REACT_APP_API_URL or defaults below
+ANDROID_DEFAULT_API="http://10.0.2.2:8000/api"
+IOS_DEFAULT_API="http://localhost:8000/api"
+
 usage() {
-    echo -e "${BLUE}Campus Circle Docker Management${NC}"
+    echo -e "${BLUE}Campus Circle – docker-manage.sh${NC}"
     echo "Usage: $0 [COMMAND] [SERVICE|CONTAINER_NAME]"
-    echo "  start [svc]        Start services (default: backend only; DB = Supabase from .env). Pass 'db' + profile local-db for local DB."
+    echo "  start [svc]        Start services (default: backend only). Pass 'db' for local DB (profile local-db)."
     echo "  stop [svc]         Stop services. No arg = stop all."
-    echo "  restart [svc]      Restart a service (pass name)."
-    echo "  build [svc]        Build images."
+    echo "  restart [svc]      Restart a service."
+    echo "  build [svc]        Build images. No arg: also sync mobile app for simulators."
     echo "  logs [svc]         Show logs."
-    echo "  status             Service status"
-    echo "  clean              Stop and remove containers/volumes"
-    echo "  shell [svc]        Shell in container (service or container name)."
-    echo "  validate           Validate docker-compose"
-    echo "  migrate            Run database migrations (Docker)"
-    echo "  run                For demo/MVP: stop all, then start dev (backend + frontend). DB = Supabase. http://localhost:3000"
-    echo "  dev                Start backend + frontend dev server. DB from .env (Supabase). http://localhost:3000"
-    echo "  prod               Start backend + frontend (nginx). DB from .env (Supabase)."
-    echo "  deploy             Stop all, build frontend + backend, start prod stack (for later use)"
+    echo "  status             Service status."
+    echo "  clean              Stop and remove containers/volumes."
+    echo "  shell [svc]        Shell in container."
+    echo "  validate           Validate docker-compose."
+    echo "  migrate            Run database migrations."
+    echo "  run                Stop all, then start dev (backend + frontend). http://localhost:3000"
+    echo "  dev                Build + recreate backend + frontend dev. http://localhost:3000 | Backend :8000"
+    echo "  prod               Start backend + nginx (needs frontend/build). http://localhost"
+    echo "  deploy             Stop all, build frontend + backend, start prod stack."
+    echo "  android            Build web, sync Capacitor, open Android Studio. Set REACT_APP_API_URL for device (default: $ANDROID_DEFAULT_API)."
+    echo "  ios                Build web, sync Capacitor, open Xcode. Set REACT_APP_API_URL for device (default: $IOS_DEFAULT_API)."
     echo "Services: ${SERVICES[*]}"
-    echo "Container names: ${CONTAINER_NAMES[*]}"
-    echo "Examples: $0 run (demo) | $0 dev | $0 stop | $0 start campus-circle-frontend"
+    echo "Examples: $0 dev | $0 android | $0 ios | REACT_APP_API_URL=http://192.168.1.10:8000/api $0 android"
     exit 1
 }
 
@@ -44,6 +49,21 @@ check_env() {
     if [ ! -f "$PROJECT_ROOT/.env" ]; then
         echo -e "${YELLOW}⚠ .env not found. Copying from .env.example${NC}"
         [ -f "$PROJECT_ROOT/.env.example" ] && cp "$PROJECT_ROOT/.env.example" "$PROJECT_ROOT/.env" || exit 1
+    fi
+}
+
+# Ensure npm is on PATH (e.g. when Node is from nvm/fnm and script runs in non-interactive bash)
+ensure_npm() {
+    if command -v npm >/dev/null 2>&1; then return; fi
+    if [ -f "$HOME/.nvm/nvm.sh" ]; then
+        # shellcheck source=/dev/null
+        . "$HOME/.nvm/nvm.sh"
+    elif [ -f "$HOME/.fnm/fnm" ] || command -v fnm >/dev/null 2>&1; then
+        eval "$(fnm env 2>/dev/null)" || true
+    fi
+    if ! command -v npm >/dev/null 2>&1; then
+        echo -e "${RED}npm not found. Install Node.js (https://nodejs.org) or run this from a terminal where 'npm' works (e.g. after nvm use).${NC}"
+        exit 1
     fi
 }
 
@@ -102,15 +122,16 @@ case "${1:-}" in
         echo -e "${BLUE}Stopping any existing containers...${NC}"
         cd "$PROJECT_ROOT"
         docker-compose --project-name campus-circle --env-file "$PROJECT_ROOT/.env" -f "$COMPOSE_FILE" --profile dev --profile nginx --profile migrations --profile local-db down 2>/dev/null || true
-        echo -e "${BLUE}Starting dev stack (backend + frontend; DB = Supabase from .env)...${NC}"
-        docker-compose --project-name campus-circle --env-file "$PROJECT_ROOT/.env" -f "$COMPOSE_FILE" --profile dev up -d backend frontend
-        echo -e "${GREEN}✅ App running. Open http://localhost:3000 (Backend: http://localhost:8000)${NC}"
-        echo -e "${YELLOW}Ensure .env has SUPABASE_DB_HOST (Supabase). First time? Run migrations: $0 migrate${NC}"
+        echo -e "${BLUE}Starting dev stack (backend + frontend)...${NC}"
+        docker-compose --project-name campus-circle --env-file "$PROJECT_ROOT/.env" -f "$COMPOSE_FILE" --profile dev up -d --build --force-recreate backend frontend
+        echo -e "${GREEN}✅ App running. http://localhost:3000 | Backend http://localhost:8000${NC}"
+        echo -e "${YELLOW}First time? Run migrations: $0 migrate${NC}"
         ;;
     dev)
         check_env
         cd "$PROJECT_ROOT"
-        docker-compose --project-name campus-circle --env-file "$PROJECT_ROOT/.env" -f "$COMPOSE_FILE" --profile dev up -d backend frontend
+        echo -e "${BLUE}Building and starting dev stack (backend + frontend)...${NC}"
+        docker-compose --project-name campus-circle --env-file "$PROJECT_ROOT/.env" -f "$COMPOSE_FILE" --profile dev up -d --build --force-recreate backend frontend
         echo -e "${GREEN}✅ Dev: Frontend http://localhost:3000 | Backend http://localhost:8000 (DB = Supabase)${NC}"
         ;;
     prod)
@@ -170,6 +191,13 @@ case "${1:-}" in
             run_compose "build --no-cache" "$svc"
         else
             run_compose "build --no-cache"
+            # Refresh mobile app (Android + iOS) so simulators get latest on next open
+            if ! command -v npm >/dev/null 2>&1 && [ -f "$HOME/.nvm/nvm.sh" ]; then . "$HOME/.nvm/nvm.sh"; fi
+            if command -v npm >/dev/null 2>&1; then
+                api_url="${REACT_APP_API_URL:-$ANDROID_DEFAULT_API}"
+                echo -e "${BLUE}Syncing mobile app (API: $api_url)...${NC}"
+                (cd "$PROJECT_ROOT/frontend" && REACT_APP_API_URL="$api_url" npm run cap:sync) && echo -e "${GREEN}✅ Mobile app synced. Open with: $0 android | $0 ios${NC}" || echo -e "${YELLOW}⚠ Mobile sync skipped (npm not found or cap:sync failed)${NC}"
+            fi
         fi
         ;;
     logs)
@@ -196,5 +224,25 @@ case "${1:-}" in
         docker exec -it "$cid" /bin/sh || docker exec -it "$cid" /bin/bash
         ;;
     validate) docker-compose -f "$COMPOSE_FILE" config >/dev/null && echo -e "${GREEN}✅ Valid${NC}" || { docker-compose -f "$COMPOSE_FILE" config; exit 1; }; ;;
+    android)
+        check_env
+        ensure_npm
+        api_url="${REACT_APP_API_URL:-$ANDROID_DEFAULT_API}"
+        echo -e "${BLUE}Building frontend and syncing to Android (API: $api_url)...${NC}"
+        cd "$PROJECT_ROOT/frontend" || exit 1
+        REACT_APP_API_URL="$api_url" npm run cap:sync || { echo -e "${RED}cap:sync failed. Run: cd frontend && npm ci${NC}"; exit 1; }
+        echo -e "${GREEN}Opening Android Studio...${NC}"
+        npm run cap:android
+        ;;
+    ios)
+        check_env
+        ensure_npm
+        api_url="${REACT_APP_API_URL:-$IOS_DEFAULT_API}"
+        echo -e "${BLUE}Building frontend and syncing to iOS (API: $api_url)...${NC}"
+        cd "$PROJECT_ROOT/frontend" || exit 1
+        REACT_APP_API_URL="$api_url" npm run cap:sync || { echo -e "${RED}cap:sync failed. Run: cd frontend && npm ci${NC}"; exit 1; }
+        echo -e "${GREEN}Opening Xcode...${NC}"
+        npm run cap:ios
+        ;;
     *) usage; ;;
 esac

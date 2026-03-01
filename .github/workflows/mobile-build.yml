@@ -1,0 +1,131 @@
+# Validate + build Android APK and iOS app. Use this before releasing any version.
+# Trigger: push to main, or manually via Actions → "Validate and build mobile" → Run workflow.
+# Artifacts: APK (install on device or BrowserStack/LambdaTest), iOS .app (simulator) or IPA if signing is configured.
+
+name: Validate and build mobile
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [ main ]
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create minimal .env
+        run: |
+          cp .env.example .env 2>/dev/null || true
+          for key in SUPABASE_URL SUPABASE_ANON_KEY SUPABASE_SERVICE_ROLE_KEY SUPABASE_DB_HOST SUPABASE_DB_PORT SUPABASE_DB_NAME SUPABASE_DB_USER SUPABASE_DB_PASSWORD; do
+            grep -q "^${key}=" .env 2>/dev/null || echo "${key}=placeholder" >> .env
+          done
+
+      - name: Sanity tests
+        run: |
+          chmod +x infra/scripts/sanity-test.sh
+          ./infra/scripts/sanity-test.sh
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend deps and test
+        run: |
+          cd frontend
+          npm ci
+          npm test -- --watchAll=false
+
+      - name: Docker Compose config
+        run: docker compose -f infra/docker-compose.yml --project-directory . config
+
+  build-android:
+    name: Android APK
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: cd frontend && npm ci
+
+      - name: Build web and sync Capacitor
+        run: |
+          cd frontend
+          REACT_APP_API_URL="${REACT_APP_API_URL:-https://your-api.com/api}" npm run cap:sync
+        env:
+          REACT_APP_API_URL: ${{ vars.REACT_APP_API_URL || 'https://your-api.com/api' }}
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'tools platform-tools platforms;android-36 build-tools;35.0.0'
+
+      - name: Build debug APK
+        run: |
+          cd frontend/android
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: frontend/android/app/build/outputs/apk/debug/app-debug.apk
+
+  build-ios:
+    name: iOS (Simulator .app)
+    needs: validate
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: cd frontend && npm ci
+
+      - name: Build web and sync Capacitor
+        run: |
+          cd frontend
+          REACT_APP_API_URL="${REACT_APP_API_URL:-https://your-api.com/api}" npm run cap:sync
+        env:
+          REACT_APP_API_URL: ${{ vars.REACT_APP_API_URL || 'https://your-api.com/api' }}
+
+      - name: Build for iOS Simulator
+        run: |
+          cd frontend/ios/App
+          xcodebuild -project App.xcodeproj -scheme App \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build \
+            -configuration Debug \
+            build CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO
+
+      - name: Upload iOS Simulator app
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-ios-simulator
+          path: frontend/ios/App/build/Build/Products/Debug-iphonesimulator/App.app
