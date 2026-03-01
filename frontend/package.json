@@ -2,6 +2,7 @@
   "name": "frontend",
   "version": "0.1.0",
   "private": true,
+  "engines": { "node": ">=20" },
   "dependencies": {
     "@capacitor/android": "^8.1.0",
     "@capacitor/ios": "^8.1.0",

@@ -42,7 +42,8 @@ jobs:
 
       - name: Docker Compose config
         run: |
-          ENV_FILE="$GITHUB_WORKSPACE/.env"
+          PROJECT_ROOT="$(cd "$GITHUB_WORKSPACE" && pwd)"
+          ENV_FILE="$(dirname "$PROJECT_ROOT")/.env"
           : > "$ENV_FILE"
           for key in SUPABASE_URL SUPABASE_ANON_KEY SUPABASE_SERVICE_ROLE_KEY SUPABASE_DB_HOST SUPABASE_DB_PORT SUPABASE_DB_NAME SUPABASE_DB_USER SUPABASE_DB_PASSWORD; do
             echo "${key}=placeholder" >> "$ENV_FILE"
