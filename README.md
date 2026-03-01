@@ -255,7 +255,7 @@ For detailed architecture information, see [docs/ARCHITECTURE.md](docs/ARCHITECT
 
 - [Architecture Documentation](docs/ARCHITECTURE.md) - System architecture and design
 - [Database Schema](docs/DATABASE.md) - Database structure and schema details
-- [Tenants and Deployment](docs/TENANTS_AND_DEPLOYMENT.md) - Tenant model (Demo-Circle, baseline, new tenants), deployment (Firebase and free hosting)
+- [Tenants and Deployment](docs/TENANTS_AND_DEPLOYMENT.md) - Tenant model (Demo-Circle, baseline, new tenants), mobile app builds via Capacitor, deployment (Firebase, Cloud Run, free hosting)
 - [Scripts Documentation](infra/scripts/README.md) - Scripts for DB, Docker, setup
 - [CHANGELOG.md](CHANGELOG.md) - Version history and changes
 

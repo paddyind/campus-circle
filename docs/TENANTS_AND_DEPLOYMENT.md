@@ -192,12 +192,13 @@ When Phase 3 is implemented:
 
 | Layer | Recommended (free) | Alternatives |
 |-------|--------------------|--------------|
-| **Frontend** | Firebase Hosting | Vercel, Netlify, GitHub Pages |
+| **Frontend (Web)**| Firebase Hosting | Vercel, Netlify, GitHub Pages |
+| **Frontend (App)**| Capacitor (Android/iOS)| React Native, Flutter |
 | **Backend** | Cloud Run (FastAPI in container) | Railway, Render, Fly.io |
 | **Database** | Supabase (existing) | Keep current PostgreSQL/Supabase |
 | **Auth** | Supabase Auth (existing) | Keep current JWT flow |
 
-Goals: deploy to Firebase or other free hosting; keep CI, test data, and doc structure unchanged.
+Goals: deploy to Firebase or other free hosting, convert web app to native mobile app via Capacitor; keep CI, test data, and doc structure unchanged.
 
 ### 4.2 Firebase Hosting (Frontend)
 
@@ -221,22 +222,49 @@ Goals: deploy to Firebase or other free hosting; keep CI, test data, and doc str
 }
 ```
 
-### 4.3 Backend (Cloud Run or other)
+### 4.3 Mobile App (Capacitor)
+
+The React frontend has been integrated with **Capacitor** to allow building it as an Android or iOS application. This enables the codebase to be wrapped in a native Webview for deployment to app stores.
+
+**Prerequisites:**
+- Node.js, npm
+- Android Studio (for Android builds)
+- Xcode (for iOS builds - Mac only)
+
+**Steps to Build and Test:**
+1. Update API URL: Ensure `REACT_APP_API_URL` points to your deployed backend (e.g., Cloud Run) and build the React app.
+   ```bash
+   cd frontend
+   REACT_APP_API_URL=https://your-api.com/api npm run build
+   ```
+2. Sync with Capacitor: This copies the built web assets into the Android and iOS project folders.
+   ```bash
+   npx cap sync
+   ```
+3. Open IDE: Open the respective IDE to build and run on a device or emulator.
+   ```bash
+   npx cap open android
+   # or
+   npx cap open ios
+   ```
+4. Build APK/Bundle: In Android Studio, go to `Build > Build Bundle(s) / APK(s) > Build APK(s)`.
+
+### 4.4 Backend (Cloud Run or other)
 
 - **Cloud Run:** Build image from `infra/Dockerfile.backend`, push to Artifact Registry (or Docker Hub), deploy to Cloud Run with env vars (`SUPABASE_*`, etc.). Expose HTTPS URL and set frontend `REACT_APP_API_URL` to it (e.g. `https://xxx.run.app/api`).  
 - **Railway / Render / Fly.io:** Deploy same Docker image or run `uvicorn`; set env vars in dashboard.
 
-### 4.4 Database and Auth
+### 4.5 Database and Auth
 
 - Keep Supabase (PostgreSQL + Auth). Run `./infra/scripts/run.sh db migrate` (or `./infra/scripts/docker-manage.sh migrate`) including 001–004.  
 - Test data: `002_seed.sql` and `004_demo_bhis_tenant.sql` for seed data; `setup-test-users.sh` creates Demo-Circle and Demo-BHIS demo users.
 
-### 4.5 CI and Test Data
+### 4.6 CI and Test Data
 
 - CI: existing sanity test and build steps unchanged.  
 - Optional: add Firebase deploy step (e.g. on push to `main`) using a Firebase token secret.
 
-### 4.6 Environment Variables
+### 4.7 Environment Variables
 
 | Variable | Where | Purpose |
 |----------|--------|---------|
@@ -246,7 +274,7 @@ Goals: deploy to Firebase or other free hosting; keep CI, test data, and doc str
 | `SUPABASE_SERVICE_ROLE_KEY` | Backend | Service role (if used) |
 | `SUPABASE_DB_*` | Backend / migrations | PostgreSQL connection; use `SUPABASE_DB_SSLMODE=require` for Supabase |
 
-### 4.7 Deploy containers (for testing)
+### 4.8 Deploy containers (for testing)
 
 From project root with `.env` configured:
 
