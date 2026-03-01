@@ -60,7 +60,7 @@ jobs:
       - name: Install Node.js dependencies
         run: |
           cd frontend
-          npm ci || npm install --legacy-peer-deps
+          npm install --legacy-peer-deps
 
       - name: Run Node.js tests
         run: |
@@ -76,12 +76,13 @@ jobs:
 
       - name: Docker Compose config
         run: |
-          cd "$GITHUB_WORKSPACE"
-          : > .env
+          ENV_FILE="$GITHUB_WORKSPACE/.env"
+          : > "$ENV_FILE"
           for key in SUPABASE_URL SUPABASE_ANON_KEY SUPABASE_SERVICE_ROLE_KEY SUPABASE_DB_HOST SUPABASE_DB_PORT SUPABASE_DB_NAME SUPABASE_DB_USER SUPABASE_DB_PASSWORD; do
-            echo "${key}=placeholder" >> .env
+            echo "${key}=placeholder" >> "$ENV_FILE"
           done
-          docker compose -f "$GITHUB_WORKSPACE/infra/docker-compose.yml" --project-directory "$GITHUB_WORKSPACE" --env-file "$GITHUB_WORKSPACE/.env" config
+          test -f "$ENV_FILE" && echo "Created .env with $(wc -l < "$ENV_FILE") lines"
+          docker compose -f "$GITHUB_WORKSPACE/infra/docker-compose.yml" --project-directory "$GITHUB_WORKSPACE" --env-file "$ENV_FILE" config
 
       - name: Build production images
         run: |
@@ -102,7 +103,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install frontend dependencies
-        run: cd frontend && (npm ci || npm install)
+        run: cd frontend && npm install
 
       - name: Build web and sync Capacitor
         run: |
@@ -146,7 +147,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install frontend dependencies
-        run: cd frontend && (npm ci || npm install)
+        run: cd frontend && npm install
 
       - name: Build web and sync Capacitor
         run: |
