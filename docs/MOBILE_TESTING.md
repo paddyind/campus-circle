@@ -204,6 +204,41 @@ Same `REACT_APP_API_URL` and same flow apply to both **APK (Android)** and **IPA
 
 ---
 
+## Troubleshooting: "Failed to fetch" / "Error loading events"
+
+When the app shows **"Error loading events: Failed to fetch"** or login fails with a network error, the app cannot reach the API. Use the steps below to confirm the URL and fix connectivity.
+
+### 1. See which URL the app is using
+
+The app now shows the **API URL** it was built with when an error occurs:
+
+- **Events page:** When events fail to load, the error box shows **"Using API: …"** with the exact base URL.
+- **Login page:** When login fails with a fetch/network error, the error box shows **"API: …"** with the same URL.
+
+If that URL is `https://your-api.com/api` or `http://localhost:8000/api`, the build was made with a placeholder or local URL; your phone cannot reach it. Rebuild the app with the correct URL (see Option 1 or 2 above).
+
+### 2. Check the backend is running and reachable
+
+- **On your computer:** Open a browser and go to `http://YOUR_LAN_IP:8000/api` (e.g. `http://192.168.1.10:8000/api`). You should see a short JSON response (e.g. `{"status":"ok",...}`). If it fails, start the backend: `./infra/scripts/docker-manage.sh dev`.
+- **From the phone (same WiFi):** On the phone’s browser, open the same URL (`http://YOUR_LAN_IP:8000/api`). If it loads, the backend is reachable from the device; if it doesn’t, the problem is network or firewall (see step 4).
+
+### 3. Logs
+
+- **Backend (Docker):** `docker logs campus-circle-backend` (or `./infra/scripts/docker-manage.sh logs backend`) to see API requests and errors. If you don’t see requests when the app retries, the request isn’t reaching the server (URL or network).
+- **Mobile app:** There are no built-in in-app logs. Use the **"Using API: …"** text on the error screen to confirm the URL. For deeper debugging, you can run the app from Android Studio or Xcode and watch Logcat / Xcode console.
+
+### 4. Checklist
+
+| Check | What to do |
+|-------|------------|
+| URL in the app | Match the "Using API" value on the error screen to the URL you intended (e.g. `http://YOUR_LAN_IP:8000/api` for same-WiFi). If wrong, set **REACT_APP_API_URL** (repo variable or workflow input) and rebuild. |
+| Backend running | Run `./infra/scripts/docker-manage.sh dev` and confirm `http://localhost:8000/api` works in a browser. |
+| Same WiFi | Phone and computer must be on the same network for a LAN IP URL to work. |
+| Firewall | Allow inbound TCP port **8000** on your computer so the phone can connect. |
+| CORS | The backend allows `capacitor://localhost` and `http://192.168.x.x` in development; no change needed for normal device testing. |
+
+---
+
 ## Validate and build in CI/CD (no extra tools)
 
 **One pipeline per push** — no duplicate runs. The main **CI** workflow runs on every push/PR to `main` and produces all artifacts.

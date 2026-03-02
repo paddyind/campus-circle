@@ -9,6 +9,12 @@ export const getApiUrl = (endpoint) => {
   return `${base}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 };
 
+/** Base URL used for API (for troubleshooting: show in errors so you can verify the app was built with the right URL). */
+export const getApiBaseDisplayUrl = () => {
+  const base = API_BASE_URL.endsWith('/api') ? API_BASE_URL : `${API_BASE_URL}/api`;
+  return base;
+};
+
 const TENANT_STORAGE_KEY = 'tenant';
 const TOKEN_STORAGE_KEY = 'token';
 

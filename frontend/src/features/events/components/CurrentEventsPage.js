@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
 import { fetchEvents, registerForEvent } from '../eventsSlice';
 import { fetchMyEvents } from '../../dashboard/dashboardSlice';
+import { getApiBaseDisplayUrl } from '../../../api/client';
 
 const CurrentEventsPage = () => {
   const dispatch = useDispatch();
@@ -41,8 +42,14 @@ const CurrentEventsPage = () => {
           <p className="mt-4 text-gray-600">Loading events...</p>
         </div>
       ) : error ? (
-        <div className="text-center py-12">
-          <p className="text-red-600 mb-4">Error loading events: {error}</p>
+        <div className="text-center py-12 max-w-lg mx-auto">
+          <p className="text-red-600 mb-2">Error loading events: {error}</p>
+          <p className="text-sm text-gray-600 mb-2 break-all" title="API URL baked in at build time">
+            Using API: <code className="bg-gray-100 px-1 rounded">{getApiBaseDisplayUrl()}</code>
+          </p>
+          <p className="text-xs text-gray-500 mb-4">
+            If this URL is wrong, rebuild the app with the correct REACT_APP_API_URL. On the same WiFi, use your computer&apos;s IP (e.g. http://192.168.1.10:8000/api). Ensure the backend is running and reachable from this device.
+          </p>
           <button
             type="button"
             onClick={() => dispatch(fetchEvents())}
