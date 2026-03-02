@@ -249,7 +249,7 @@ For detailed architecture information, see [docs/ARCHITECTURE.md](docs/ARCHITECT
 - [Architecture Documentation](docs/ARCHITECTURE.md) - System architecture and design
 - [Database Schema](docs/DATABASE.md) - Database structure and schema details
 - [Tenants and Deployment](docs/TENANTS_AND_DEPLOYMENT.md) - Tenant model (Demo-Circle, baseline, new tenants), mobile app builds via Capacitor, deployment (Firebase, Cloud Run, free hosting)
-- [Mobile testing (Android / iOS)](docs/MOBILE_TESTING.md) - Local: `docker-manage.sh android` / `ios`. CI: validate + build APK & iOS (no extra tools).
+- [Mobile testing (Android / iOS)](docs/MOBILE_TESTING.md) - Local: `docker-manage.sh android` / `ios`. CI: validate + build APK & iOS. **If APIs/login fail on your phone:** see “Why APIs / login fail on a physical device” there (same-WiFi LAN IP or public backend hosting; same for APK and IPA).
 - [Scripts Documentation](infra/scripts/README.md) - Scripts for DB, Docker, setup
 - [CHANGELOG.md](CHANGELOG.md) - Version history and changes
 

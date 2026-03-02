@@ -96,6 +96,114 @@ For **store builds**, use your deployed backend URL (HTTPS), not localhost or 10
 
 ---
 
+## Why APIs / login fail on a physical device (and how to fix it)
+
+The app talks to your **FastAPI backend** using a URL that is **baked in at build time** (`REACT_APP_API_URL`). If you install an APK or IPA that was built with a placeholder or unreachable URL, only static content works; all API calls and login will fail.
+
+- **CI-built APK/IPA** uses the repo variable `REACT_APP_API_URL` or the default `https://your-api.com/api` (a placeholder). Your phone cannot reach that, so APIs fail.
+- **Docker Desktop** runs only on your computer. The phone cannot use `localhost` or your machine’s hostname unless you use one of the two approaches below.
+
+You have two ways to get a working app on your phone (same for **Android and iOS**):
+
+---
+
+### Option 1: Same WiFi – no public hosting
+
+Use this for quick testing at home/office when your phone and computer are on the same network.
+
+#### If you build APK/IPA only in GitHub Actions (no Android SDK / Xcode locally)
+
+You can still test with your local backend on the same WiFi by having GHA build the app with your machine’s IP.
+
+1. **Run the backend on your machine**
+   ```bash
+   ./infra/scripts/docker-manage.sh dev
+   ```
+   Check the API in a browser: http://localhost:8000/api (should return JSON).
+
+2. **Find your computer’s LAN IP**
+   - **Mac:** System Settings → Network → Wi‑Fi → Details (or run `ipconfig getifaddr en0` in Terminal).
+   - **Windows:** `ipconfig` and look for IPv4 Address under your Wi‑Fi adapter.
+   - Example: `192.168.1.10`
+
+3. **Trigger a mobile build with that URL**
+   - In GitHub: go to **Actions**. In the **left sidebar**, click the workflow **"Validate and build mobile"** (not "CI").
+   - You should see a **"Run workflow"** dropdown on the right. **Click the dropdown** (the part that says "Run workflow") to expand it — the **"API URL for the app"** input field appears there.
+   - Enter: `http://YOUR_LAN_IP:8000/api` (e.g. `http://192.168.1.10:8000/api`). Leave it empty to use the repo variable or default.
+   - Choose the branch (e.g. `main`), then click the green **Run workflow** button.
+   - **If you don't see the "API URL for the app" field:** (1) Scroll down inside the "Run workflow" dropdown — the field can appear below the branch selector. (2) Confirm `.github/workflows/mobile-build.yml` on the **main** branch (on GitHub → Code) contains an `inputs:` block under `workflow_dispatch`; if not, commit and push the workflow file. (3) **Workaround:** set the repo variable **REACT_APP_API_URL** (Settings → Secrets and variables → Actions → Variables) to your URL (e.g. `http://YOUR_LAN_IP:8000/api`) and run the workflow with the dropdown left as-is; the workflow uses that variable when the input is empty.
+
+4. **Download and install**
+   - Open the completed run → **Artifacts**.
+   - Download **app-debug-apk** → copy the APK to your Android phone (e.g. via cloud or USB) and install.
+   - For iOS: download **app-ios-simulator** (simulator) or use a signed IPA if you have that set up; install on your iPhone.
+
+5. **Connect phone to the same WiFi** as your computer and allow port **8000** in your machine’s firewall if needed. Then open the app on the phone; login and APIs should hit your local backend.
+
+If your LAN IP changes (e.g. new network), repeat from step 2 and run the workflow again with the new IP so the app points to the right host.
+
+#### If you build APK/IPA locally (Android Studio / Xcode)
+
+1. **Run the backend on your machine**
+   ```bash
+   ./infra/scripts/docker-manage.sh dev
+   ```
+2. **Find your computer’s LAN IP** (e.g. `192.168.1.10`).
+3. **Build the app with that URL:**
+   ```bash
+   # Android
+   REACT_APP_API_URL=http://YOUR_LAN_IP:8000/api ./infra/scripts/docker-manage.sh android
+   ```
+   Then in Android Studio: **Build → Build Bundle(s) / APK(s) → Build APK(s)**. Install the APK on your phone (same WiFi).
+   ```bash
+   # iOS
+   REACT_APP_API_URL=http://YOUR_LAN_IP:8000/api ./infra/scripts/docker-manage.sh ios
+   ```
+   In Xcode, select your iPhone and run, or **Product → Archive** to create an IPA.
+4. **Allow inbound connections** on your machine (e.g. port 8000). Phone and computer must be on the same WiFi.
+
+No need for Firebase or any public hosting for this option.
+
+---
+
+### Option 2: Public backend – works anywhere (recommended for real use)
+
+To use the app on your phone (or share with others) without being on the same WiFi, the backend must be reachable on the internet. **Docker Desktop is local only**; you need to deploy the API to a public host.
+
+1. **Host the FastAPI backend** (not the static app) on a cloud provider. Examples:
+   - [Railway](https://railway.app) – connect repo or deploy with Docker.
+   - [Render](https://render.com) – Web Service from Docker or from source.
+   - [Fly.io](https://fly.io) – deploy with Dockerfile.
+   - Google Cloud Run, AWS, or a VPS – run your backend container there.
+
+   Use the **same** `.env` (Supabase, DB, etc.) as in your project; set env vars in the host’s dashboard. You get a URL like `https://your-app.up.railway.app` (and your API might be at `https://your-app.up.railway.app/api` if you mount the app at `/api`).
+
+2. **Point the app at that URL when building**
+   - **CI (APK/IPA from GitHub Actions):** In the repo go to **Settings → Secrets and variables → Actions**, add (or edit) variable **`REACT_APP_API_URL`** = `https://your-backend.example.com/api` (your real backend URL with `/api`). The next CI run will build the app with this URL; download the APK or iOS artifact and install.
+   - **Local build for Android:**  
+     `REACT_APP_API_URL=https://your-backend.example.com/api ./infra/scripts/docker-manage.sh android`  
+     Then build the APK in Android Studio and install on the device.
+   - **Local build for iOS:**  
+     `REACT_APP_API_URL=https://your-backend.example.com/api ./infra/scripts/docker-manage.sh ios`  
+     Then in Xcode run on device or create an IPA via **Product → Archive**.
+
+3. **CORS:** Your backend already allows origins from the app; when the app is loaded from `capacitor://localhost` or your production domain, ensure the deployed backend’s CORS settings include that origin (or use a broad dev allowlist for testing).
+
+**Firebase:** Firebase is great for auth, Firestore, and hosting **static** sites. Your login and APIs are handled by the **FastAPI backend**, so you still need to host that backend somewhere (e.g. Railway, Render, Fly.io). You don’t have to use Firebase unless you later switch auth/data to Firebase.
+
+---
+
+### Summary (Android and iOS)
+
+| Goal                         | What to do |
+|-----------------------------|------------|
+| Test on phone, same WiFi   | Run backend locally, build app with `REACT_APP_API_URL=http://YOUR_LAN_IP:8000/api`, install APK/IPA. |
+| Test anywhere / production  | Deploy backend to Railway/Render/Fly.io (or similar), set `REACT_APP_API_URL` to that URL (e.g. in GitHub Actions variable), build APK/IPA and install. |
+
+Same `REACT_APP_API_URL` and same flow apply to both **APK (Android)** and **IPA (iOS)**.
+
+---
+
 ## Validate and build in CI/CD (no extra tools)
 
 **One pipeline per push** — no duplicate runs. The main **CI** workflow runs on every push/PR to `main` and produces all artifacts.
@@ -109,7 +217,7 @@ For **store builds**, use your deployed backend URL (HTTPS), not localhost or 10
 
 So one run per push: validate and Docker build first, then Android and iOS build in parallel. Set the repo variable **`REACT_APP_API_URL`** so the built app uses the correct backend.
 
-**Optional:** **Validate and build mobile** (`.github/workflows/mobile-build.yml`) runs only when you trigger it manually (Actions → Validate and build mobile → Run workflow). Use it when you want mobile artifacts without running the full CI.
+**Optional:** **Validate and build mobile** (`.github/workflows/mobile-build.yml`) runs only when you trigger it manually (Actions → select **Validate and build mobile** in the left sidebar, then click the **Run workflow** dropdown to see the **API URL for the app** field). When you run it, enter your URL there (e.g. for same-WiFi) or leave empty to use the repo variable. If you don't see the field, you're likely on the **CI** workflow (which runs on push and has no input); select **Validate and build mobile** and expand the dropdown. When you run it, you can optionally enter **API URL for the app** (e.g. `http://YOUR_LAN_IP:8000/api` for same-WiFi testing with your local backend); see “Option 1: Same WiFi” above.
 
 ---
 

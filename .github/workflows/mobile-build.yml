@@ -6,7 +6,13 @@
 name: Validate and build mobile
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: 'API URL (e.g. http://YOUR_LAN_IP:8000/api for same-WiFi). Leave blank to use repo variable.'
+        required: false
+        default: ''
+        type: string
 
 jobs:
   validate:
@@ -91,7 +97,7 @@ jobs:
           cd "$REPO_ROOT/frontend"
           REACT_APP_API_URL="${REACT_APP_API_URL:-https://your-api.com/api}" npm run cap:sync
         env:
-          REACT_APP_API_URL: ${{ vars.REACT_APP_API_URL || 'https://your-api.com/api' }}
+          REACT_APP_API_URL: ${{ github.event.inputs.api_url || vars.REACT_APP_API_URL || 'https://your-api.com/api' }}
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -146,7 +152,7 @@ jobs:
           cd "$REPO_ROOT/frontend"
           REACT_APP_API_URL="${REACT_APP_API_URL:-https://your-api.com/api}" npm run cap:sync
         env:
-          REACT_APP_API_URL: ${{ vars.REACT_APP_API_URL || 'https://your-api.com/api' }}
+          REACT_APP_API_URL: ${{ github.event.inputs.api_url || vars.REACT_APP_API_URL || 'https://your-api.com/api' }}
 
       - name: Build for iOS Simulator
         run: |
