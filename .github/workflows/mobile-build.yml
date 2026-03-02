@@ -110,6 +110,12 @@ jobs:
         with:
           packages: 'tools platform-tools platforms;android-36 build-tools;35.0.0'
 
+      - name: Verify Android manifest allows HTTP (cleartext) for device
+        run: |
+          cd "$REPO_ROOT/frontend/android"
+          grep -q 'usesCleartextTraffic="true"' app/src/main/AndroidManifest.xml || { echo "ERROR: AndroidManifest.xml must contain usesCleartextTraffic=\"true\" so the app can reach http://YOUR_IP:8000/api on device"; exit 1; }
+          echo "Manifest allows cleartext - APK will be able to use HTTP API on device"
+
       - name: Build debug APK
         run: |
           cd "$REPO_ROOT/frontend/android"
