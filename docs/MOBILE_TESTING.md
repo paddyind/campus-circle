@@ -236,6 +236,7 @@ If that URL is `https://your-api.com/api` or `http://localhost:8000/api`, the bu
 | Same WiFi | Phone and computer must be on the same network for a LAN IP URL to work. |
 | Firewall | Allow inbound TCP port **8000** on your computer so the phone can connect. |
 | CORS | The backend allows `capacitor://localhost` and `http://192.168.x.x` in development; no change needed for normal device testing. |
+| **Chrome works, app doesn't** | On Android, the app WebView blocks HTTP (cleartext) by default. The project enables `android:usesCleartextTraffic="true"` in `AndroidManifest.xml` so the app can reach `http://YOUR_IP:8000/api`. If you see "Failed to fetch" while the same URL works in the phone's browser, rebuild and reinstall the APK after this change. |
 
 ---
 
