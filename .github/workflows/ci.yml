@@ -154,6 +154,16 @@ jobs:
           cd "$REPO_ROOT/frontend/android"
           ./gradlew assembleDebug --no-daemon
 
+      - name: Verify built APK allows cleartext (HTTP)
+        run: |
+          cd "$REPO_ROOT/frontend/android"
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          [ -f "$APK" ] || { echo "APK not found"; exit 1; }
+          AAPT="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          [ -x "$AAPT" ] || AAPT="$(find "$ANDROID_HOME/build-tools" -name aapt -type f | head -1)"
+          "$AAPT" dump xmltree "$APK" AndroidManifest.xml | grep -q "usesCleartextTraffic" || { echo "Built APK manifest missing usesCleartextTraffic - HTTP API will fail on device"; exit 1; }
+          echo "APK verified: manifest allows cleartext traffic"
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
