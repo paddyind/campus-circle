@@ -28,7 +28,7 @@ async def list_tenants(request: Request):
 async def current_tenant(request: Request):
     """
     Current tenant (from X-Tenant or default) and list of allowed tenant slugs for switcher.
-    For non-super-admin users with multiple tenants, prefer the tenant that matches their email (e.g. bhis_* -> demo-bhis).
+    For non-super-admin users, resolve tenant by email or use their only allowed tenant.
     """
     tenant = getattr(request.state, "tenant", None) or {}
     user = getattr(request.state, "user", None)
@@ -41,12 +41,32 @@ async def current_tenant(request: Request):
             status_code=503,
             detail="Database temporarily unavailable. Check SUPABASE_DB_* config and network.",
         ) from e
-    # Prefer tenant by email when user has multiple (e.g. BHIS parent should see demo-bhis, not demo-circle)
+
+    # Resolve correct tenant for the user:
+    # 1. If current tenant (from X-Tenant) is not in allowed_slugs, override
+    # 2. Prefer tenant by email (e.g. bhis_* -> demo-bhis)
+    # 3. Otherwise use first allowed tenant
     user_email = (user or {}).get("email") or ""
-    if user_email and len(allowed_slugs) > 1:
+    current_slug = tenant.get("slug", "")
+    
+    if current_slug not in allowed_slugs:
+        # X-Tenant header doesn't match user's access - resolve correctly
+        preferred = resolve_tenant_by_email(user_email) if user_email else None
+        if preferred and preferred.get("slug") in allowed_slugs:
+            tenant = preferred
+        elif allowed_slugs:
+            # Use first allowed tenant
+            all_tenants = get_all_tenants()
+            for t in all_tenants:
+                if t["slug"] in allowed_slugs:
+                    tenant = t
+                    break
+    elif user_email and len(allowed_slugs) > 1:
+        # User has multiple tenants - prefer the one matching their email
         preferred = resolve_tenant_by_email(user_email)
         if preferred and preferred.get("slug") in allowed_slugs:
             tenant = preferred
+
     return {
         "tenant": {
             "id": str(tenant.get("id")) if tenant.get("id") else None,

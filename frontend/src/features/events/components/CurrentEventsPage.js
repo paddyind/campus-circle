@@ -1,9 +1,10 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
 import { fetchEvents, registerForEvent } from '../eventsSlice';
 import { fetchMyEvents } from '../../dashboard/dashboardSlice';
 import { getApiBaseDisplayUrl } from '../../../api/client';
+import EventsCalendarView from './EventsCalendarView';
 
 const CurrentEventsPage = () => {
   const dispatch = useDispatch();
@@ -11,6 +12,12 @@ const CurrentEventsPage = () => {
   const { token, user, currentTenant } = useSelector((state) => state.auth);
   const { profile } = useSelector((state) => state.dashboard);
   const isAdmin = user?.role === 'admin' || profile?.role === 'admin';
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'calendar'
+  const [calendarPanelPosition, setCalendarPanelPosition] = useState('right'); // 'left' | 'right' | 'bottom'
+  const [selectedEventId, setSelectedEventId] = useState(null);
+
+  const features = currentTenant?.settings?.features || {};
+  const calendarViewEnabled = features.calendar_view !== false;
 
   useEffect(() => {
     dispatch(fetchEvents());
@@ -35,7 +42,43 @@ const CurrentEventsPage = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 min-h-screen">
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">All Events</h1>
+      <div className="flex flex-wrap justify-between items-center gap-4 mb-8">
+        <h1 className="text-3xl font-bold text-gray-900">All Events</h1>
+        {calendarViewEnabled && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">View:</span>
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
+                viewMode === 'list' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              List
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('calendar')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
+                viewMode === 'calendar' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Calendar
+            </button>
+            {viewMode === 'calendar' && (
+              <select
+                value={calendarPanelPosition}
+                onChange={(e) => setCalendarPanelPosition(e.target.value)}
+                className="ml-2 text-sm border border-gray-300 rounded-lg px-2 py-1.5"
+              >
+                <option value="right">Details left, calendar right</option>
+                <option value="left">Calendar left, details right</option>
+                <option value="bottom">Calendar top, details below</option>
+              </select>
+            )}
+          </div>
+        )}
+      </div>
       {loading ? (
         <div className="text-center py-12">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
@@ -59,6 +102,15 @@ const CurrentEventsPage = () => {
           </button>
         </div>
       ) : events.length > 0 ? (
+        viewMode === 'calendar' && calendarViewEnabled ? (
+          <EventsCalendarView
+            events={events}
+            selectedEventId={selectedEventId}
+            onSelectEvent={setSelectedEventId}
+            panelPosition={calendarPanelPosition}
+            registeredEvents={registeredEvents}
+          />
+        ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {events.map((event) => {
             const isRegistered = registeredEvents && registeredEvents.includes(event.id);
@@ -174,6 +226,7 @@ const CurrentEventsPage = () => {
             );
           })}
         </div>
+        )
                   ) : (
                     <div className="bg-white rounded-xl shadow-lg p-12 text-center">
                       <svg className="mx-auto h-16 w-16 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

@@ -17,6 +17,7 @@ const emptyEventForm = () => ({
 
 const ManageEvents = () => {
   const { token, currentTenant } = useSelector((state) => state.auth);
+  const calendarImportEnabled = (currentTenant?.settings?.features?.calendar_import) !== false;
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -42,6 +43,13 @@ const ManageEvents = () => {
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState(null);
   const [editingEventId, setEditingEventId] = useState(null);
+  const [showCalendarImportModal, setShowCalendarImportModal] = useState(false);
+  const [calendarFile, setCalendarFile] = useState(null);
+  const [calendarSchoolId, setCalendarSchoolId] = useState('');
+  const [calendarDryRun, setCalendarDryRun] = useState(true);
+  const [calendarImportLoading, setCalendarImportLoading] = useState(false);
+  const [calendarImportResult, setCalendarImportResult] = useState(null);
+  const [calendarImportError, setCalendarImportError] = useState(null);
 
   const fetchSchools = useCallback(async () => {
     try {
@@ -198,6 +206,36 @@ const ManageEvents = () => {
     setEditingEventId(event.id);
     setFormError(null);
     setShowEditModal(true);
+  };
+
+  const handleCalendarImport = async (e) => {
+    e.preventDefault();
+    if (!calendarFile || !token) return;
+    setCalendarImportLoading(true);
+    setCalendarImportError(null);
+    setCalendarImportResult(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', calendarFile);
+      if (calendarSchoolId) formData.append('school_id', calendarSchoolId);
+      if (calendarDryRun) formData.append('dry_run', 'true');
+      const response = await fetch(getApiUrl('/events/import-calendar'), {
+        method: 'POST',
+        headers: getApiHeaders(token),
+        body: formData,
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || 'Import failed');
+      }
+      const data = await response.json();
+      setCalendarImportResult(data);
+      if (!data.dry_run) fetchEvents();
+    } catch (err) {
+      setCalendarImportError(err.message || 'Import failed');
+    } finally {
+      setCalendarImportLoading(false);
+    }
   };
 
   const handleEventFormChange = (field, value) => {
@@ -414,14 +452,25 @@ const ManageEvents = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex flex-wrap justify-between items-center gap-4 mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Manage Events</h1>
-        <button 
-          onClick={openCreateModal}
-          className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700"
-        >
-          Create Event
-        </button>
+        <div className="flex gap-2">
+          {calendarImportEnabled && (
+            <button
+              type="button"
+              onClick={() => { setShowCalendarImportModal(true); setCalendarImportResult(null); setCalendarImportError(null); }}
+              className="bg-sky-600 text-white px-4 py-2 rounded-lg hover:bg-sky-700"
+            >
+              Import Calendar (iCal/PDF/Image)
+            </button>
+          )}
+          <button 
+            onClick={openCreateModal}
+            className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700"
+          >
+            Create Event
+          </button>
+        </div>
       </div>
 
       {events.length === 0 ? (
@@ -483,6 +532,89 @@ const ManageEvents = () => {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Calendar Import Modal */}
+      {showCalendarImportModal && (
+        <div className="fixed inset-0 z-[100] overflow-y-auto" role="dialog" aria-modal="true">
+          <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20">
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 z-[101]" onClick={() => setShowCalendarImportModal(false)} aria-hidden="true" />
+            <div className="relative z-[102] inline-block bg-white rounded-lg shadow-xl text-left overflow-hidden sm:my-8 sm:max-w-lg sm:w-full">
+              <div className="px-4 pt-5 pb-4 sm:p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Import events from calendar</h3>
+                <p className="text-sm text-gray-600 mb-3">
+                  Upload an iCal (.ics), PDF, or image (PNG/JPG). For PDFs and images we extract dates and event names from the text. Works with school annual calendars and similar documents.
+                </p>
+                <form onSubmit={handleCalendarImport} className="space-y-4">
+                  {calendarImportError && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm">{calendarImportError}</div>
+                  )}
+                  {calendarImportResult && (
+                    <div className={`px-3 py-2 rounded text-sm border ${
+                      calendarImportResult.message?.includes('No events') || calendarImportResult.extracted_count === 0
+                        ? 'bg-amber-50 border-amber-200 text-amber-800'
+                        : 'bg-green-50 border-green-200 text-green-700'
+                    }`}>
+                      {calendarImportResult.dry_run
+                        ? (calendarImportResult.message ?? `Preview: ${calendarImportResult.extracted_count ?? 0} events extracted`)
+                        : (calendarImportResult.message ?? `Created: ${calendarImportResult.created}, Updated: ${calendarImportResult.updated}`)}
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">File (.ics, .pdf, .png, .jpg)</label>
+                    <input
+                      type="file"
+                      accept=".ics,.ical,.pdf,.png,.jpg,.jpeg"
+                      onChange={(e) => setCalendarFile(e.target.files?.[0] || null)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">School (optional)</label>
+                    <select
+                      value={calendarSchoolId}
+                      onChange={(e) => setCalendarSchoolId(e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                    >
+                      <option value="">— None —</option>
+                      {schools.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="calendarDryRun"
+                      checked={calendarDryRun}
+                      onChange={(e) => setCalendarDryRun(e.target.checked)}
+                      className="rounded border-gray-300"
+                    />
+                    <label htmlFor="calendarDryRun" className="text-sm text-gray-700">
+                      Preview only (no save)
+                    </label>
+                  </div>
+                  <div className="flex justify-end gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowCalendarImportModal(false)}
+                      className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={!calendarFile || calendarImportLoading}
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                      {calendarImportLoading ? 'Importing...' : 'Import'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

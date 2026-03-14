@@ -27,3 +27,7 @@ if ALLOWED_EMAIL_DOMAINS:
     ALLOWED_EMAIL_DOMAINS = [d.strip().lower() for d in ALLOWED_EMAIL_DOMAINS.split(",") if d.strip()]
 else:
     ALLOWED_EMAIL_DOMAINS = []
+
+# Local storage for event resources (tenant/event-scoped). Use absolute or relative path.
+# Default: ./storage in project root. For Docker, use a volume mount, e.g. /app/storage.
+STORAGE_BASE_PATH = os.environ.get("STORAGE_BASE_PATH", "").strip() or None

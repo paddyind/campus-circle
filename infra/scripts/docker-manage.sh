@@ -17,9 +17,21 @@ COMPOSE_FILE="$PROJECT_ROOT/infra/docker-compose.yml"
 SERVICES=("nginx" "frontend" "backend" "db" "migrations")
 CONTAINER_NAMES=("campus-circle-frontend" "campus-circle-frontend-dev" "campus-circle-backend" "campus-circle-db" "campus-circle-migrations")
 
-# API URL for mobile: Android emulator sees host as 10.0.2.2; iOS Simulator and physical devices use REACT_APP_API_URL or defaults below
-ANDROID_DEFAULT_API="http://10.0.2.2:8000/api"
-IOS_DEFAULT_API="http://localhost:8000/api"
+# API URL for mobile: Android emulator sees host as 10.0.2.2; physical devices on same WiFi need host's LAN IP
+ANDROID_EMULATOR_API="http://10.0.2.2:8000/api"
+IOS_SIMULATOR_API="http://localhost:8000/api"
+
+# Get host LAN IP for same-WiFi testing (Android/iPad physical devices)
+get_lan_api_url() {
+    [ -n "$REACT_APP_API_URL" ] && echo "$REACT_APP_API_URL" && return
+    local ip
+    if [[ "$(uname)" == "Darwin" ]]; then
+        ip=$(ipconfig getifaddr en0 2>/dev/null) || ip=$(ipconfig getifaddr en1 2>/dev/null) || ip=$(ipconfig getifaddr bridge0 2>/dev/null)
+    else
+        ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+    fi
+    [ -n "$ip" ] && echo "http://${ip}:8000/api" || echo ""
+}
 
 usage() {
     echo -e "${BLUE}Campus Circle – docker-manage.sh${NC}"
@@ -38,10 +50,11 @@ usage() {
     echo "  dev                Build + recreate backend + frontend dev. http://localhost:3000 | Backend :8000"
     echo "  prod               Start backend + nginx (needs frontend/build). http://localhost"
     echo "  deploy             Stop all, build frontend + backend, start prod stack."
-    echo "  android            Build web, sync Capacitor, open Android Studio. Set REACT_APP_API_URL for device (default: $ANDROID_DEFAULT_API)."
-    echo "  ios                Build web, sync Capacitor, open Xcode. Set REACT_APP_API_URL for device (default: $IOS_DEFAULT_API)."
+    echo "  android            Build web, sync Capacitor, open Android Studio. Set REACT_APP_API_URL for device."
+    echo "  apk                Build debug APK for same-WiFi testing (auto-detects LAN IP). Output: frontend/android/app/build/outputs/apk/debug/"
+    echo "  ios                Build web, sync Capacitor, open Xcode. Set REACT_APP_API_URL for device."
     echo "Services: ${SERVICES[*]}"
-    echo "Examples: $0 dev | $0 android | $0 ios | REACT_APP_API_URL=http://192.168.1.10:8000/api $0 android"
+    echo "Examples: $0 dev | $0 apk | $0 android | REACT_APP_API_URL=http://192.168.1.10:8000/api $0 apk"
     exit 1
 }
 
@@ -227,17 +240,36 @@ case "${1:-}" in
     android)
         check_env
         ensure_npm
-        api_url="${REACT_APP_API_URL:-$ANDROID_DEFAULT_API}"
+        api_url="${REACT_APP_API_URL:-$ANDROID_EMULATOR_API}"
         echo -e "${BLUE}Building frontend and syncing to Android (API: $api_url)...${NC}"
         cd "$PROJECT_ROOT/frontend" || exit 1
         REACT_APP_API_URL="$api_url" npm run cap:sync || { echo -e "${RED}cap:sync failed. Run: cd frontend && npm ci${NC}"; exit 1; }
         echo -e "${GREEN}Opening Android Studio...${NC}"
         npm run cap:android
         ;;
+    apk)
+        check_env
+        ensure_npm
+        lan_url=$(get_lan_api_url)
+        api_url="${REACT_APP_API_URL:-$lan_url}"
+        if [ -z "$api_url" ]; then
+            echo -e "${YELLOW}Could not detect LAN IP. Set REACT_APP_API_URL=http://YOUR_IP:8000/api for same-WiFi device testing.${NC}"
+            api_url="http://10.0.2.2:8000/api"
+        fi
+        echo -e "${BLUE}Building APK for same-WiFi testing (API: $api_url)...${NC}"
+        cd "$PROJECT_ROOT/frontend" || exit 1
+        REACT_APP_API_URL="$api_url" npm run cap:sync || { echo -e "${RED}cap:sync failed${NC}"; exit 1; }
+        cd android || exit 1
+        ./gradlew assembleDebug 2>/dev/null || ./gradlew.bat assembleDebug 2>/dev/null || { echo -e "${RED}Gradle build failed. Run from Android Studio: $0 android${NC}"; exit 1; }
+        apk_path="$PROJECT_ROOT/frontend/android/app/build/outputs/apk/debug/app-debug.apk"
+        echo -e "${GREEN}✅ APK built: $apk_path${NC}"
+        echo -e "${YELLOW}Install on Android: adb install -r $apk_path${NC}"
+        echo -e "${YELLOW}Ensure backend is running (Docker: $0 run) and device is on same WiFi as this machine.${NC}"
+        ;;
     ios)
         check_env
         ensure_npm
-        api_url="${REACT_APP_API_URL:-$IOS_DEFAULT_API}"
+        api_url="${REACT_APP_API_URL:-$IOS_SIMULATOR_API}"
         echo -e "${BLUE}Building frontend and syncing to iOS (API: $api_url)...${NC}"
         cd "$PROJECT_ROOT/frontend" || exit 1
         REACT_APP_API_URL="$api_url" npm run cap:sync || { echo -e "${RED}cap:sync failed. Run: cd frontend && npm ci${NC}"; exit 1; }

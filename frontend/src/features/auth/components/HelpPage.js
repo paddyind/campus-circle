@@ -95,6 +95,14 @@ const HelpPage = () => {
               <h4 className="font-semibold text-gray-800 mb-2">How do I submit feedback or report an issue?</h4>
               <p className="text-gray-600">Use the "Contact Us" page to submit feedback, complaints, or suggestions. You can also relate your submission to a specific event if needed.</p>
             </div>
+            <div className="border-l-4 border-indigo-500 pl-4">
+              <h4 className="font-semibold text-gray-800 mb-2">Where are event resources (documents, photos, agreements)?</h4>
+              <p className="text-gray-600">Event organizers can upload resources (documents, media, certificates, agreements) on each event&apos;s detail page. Access is controlled by folder/category: public, participants-only, or private. View and download files you have access to.</p>
+            </div>
+            <div className="border-l-4 border-indigo-500 pl-4">
+              <h4 className="font-semibold text-gray-800 mb-2">Can I view events in a calendar?</h4>
+              <p className="text-gray-600">On the Events page, use the "Calendar" view toggle to see events month-by-month. You can switch between list and calendar views, and choose whether event details appear on the left or right of the calendar.</p>
+            </div>
           </div>
         </div>
 

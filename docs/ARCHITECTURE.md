@@ -168,7 +168,7 @@ Port 80                              Port 8000                Port 5432
 CampusCircle is structured for **tenant-based productization**:
 
 - **Default tenant: Demo-Circle** — The current deployment is the internal/default tenant "Demo-Circle". Its data lives in schemas `campus_circle` and `campus_circle_auth`. Demo-Circle has demo data and (in a future phase) admin privileges to create new client tenants.
-- **Tenant registry** — Table `public.tenants` lists all tenants (name, slug, schema_app, schema_auth, is_internal). See migration `003_tenant_registry.sql`.
+- **Tenant registry** — Table `public.tenants` lists all tenants (name, slug, schema_app, schema_auth, is_internal). See migration `003_tenants_multitenancy.sql`.
 - **Future clients** — New tenants get their own schemas (e.g. `tenant_<slug>`) with the same structure as the baseline; data is fully separated by schema. See [TENANTS_AND_DEPLOYMENT.md](TENANTS_AND_DEPLOYMENT.md).
 
 For the current (first) phase, the app always uses Demo-Circle’s schemas; tenant resolution and create-tenant flows are planned for later phases.
@@ -198,12 +198,20 @@ The application uses isolated schemas per tenant. For **Demo-Circle** (default):
 4. **API Security**: Token validation on protected endpoints
 5. **Database Security**: Row-level security (RLS) when using Supabase
 
+## Event Storage and Features
+
+- **Event resources**: Local filesystem storage (configurable via `STORAGE_BASE_PATH`) for all file types (documents, media, agreements) per event. Organized as `{tenant_slug}/events/{event_id}/{category}/`. Folder/category organization protects or allows access (visibility: public, participants-only, private).
+- **Calendar import**: Upload iCal/ICS files to bulk-add or update events. Controlled by tenant setting `features.calendar_import`.
+- **Calendar view**: Month-by-month view with list toggle and split panel (details left/right). Controlled by tenant setting `features.calendar_view`.
+- **Tenant feature flags**: `features.event_storage`, `features.calendar_import`, `features.calendar_view` in `public.tenants.settings`. Base/Parent (Demo) tenant has all enabled by default.
+
 ## Scalability Considerations
 
 - **Horizontal Scaling**: Backend can be scaled by running multiple instances
 - **Database Scaling**: Can migrate to Supabase for managed scaling
 - **Caching**: Can add Redis for session/cache management
 - **CDN**: Frontend static files can be served via CDN
+- **Storage**: Event resources use local filesystem; future SaaS tiers can switch to S3/MinIO via config
 
 ## Monitoring and Logging
 

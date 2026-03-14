@@ -40,6 +40,11 @@ case "$1" in
     shift
     RUN_ARGS=("$@")
     ;;
+  fix_tenant_users|fix_tenant_users.py)
+    RUN_SCRIPT="infra/scripts/fix_tenant_users.py"
+    shift
+    RUN_ARGS=("$@")
+    ;;
   *)
     if [ -z "$1" ]; then
       echo "Usage: $0 <script> [args...]"
@@ -47,6 +52,7 @@ case "$1" in
       echo "  $0 infra/scripts/db.py setup"
       echo "  $0 setup_super_admin"
       echo "  $0 setup_tenant_users demo-bhis"
+      echo "  $0 fix_tenant_users"
       exit 1
     fi
     RUN_SCRIPT="$1"

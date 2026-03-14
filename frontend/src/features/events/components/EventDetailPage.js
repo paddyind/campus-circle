@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useParams, Link, useLocation } from 'react-router-dom';
 import { getApiUrl, getApiHeaders } from '../../../api/client';
@@ -21,7 +21,77 @@ const EventDetailPage = () => {
   const [showCancelChildModal, setShowCancelChildModal] = useState(false);
   const [showRegistrationsModal, setShowRegistrationsModal] = useState(false);
   const [cancelError, setCancelError] = useState(null);
-  const [myRegistrations, setMyRegistrations] = useState([]); // { student_id, full_name }[] for cancel labels
+  const [myRegistrations, setMyRegistrations] = useState([]);
+  const [resources, setResources] = useState([]);
+  const [resourcesLoading, setResourcesLoading] = useState(false);
+  const [uploadCategory, setUploadCategory] = useState('details');
+  const [uploadVisibility, setUploadVisibility] = useState('participants');
+  const [uploadFile, setUploadFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState(null);
+
+  const eventStorageEnabled = (useSelector((s) => s.auth.currentTenant)?.settings?.features?.event_storage) !== false;
+
+  const fetchResources = useCallback(async () => {
+    if (!id || !eventStorageEnabled) return;
+    setResourcesLoading(true);
+    try {
+      const res = await fetch(getApiUrl(`/events/${id}/resources`), { headers: getApiHeaders(token) });
+      if (res.ok) {
+        const data = await res.json();
+        setResources(data || []);
+      }
+    } catch {
+      setResources([]);
+    } finally {
+      setResourcesLoading(false);
+    }
+  }, [id, token, eventStorageEnabled]);
+
+  useEffect(() => {
+    fetchResources();
+  }, [fetchResources]);
+
+  const handleUpload = async (e) => {
+    e.preventDefault();
+    if (!uploadFile || !token || !id) return;
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', uploadFile);
+      formData.append('category', uploadCategory);
+      formData.append('visibility', uploadCategory === 'agreements' ? 'private' : uploadVisibility);
+      const res = await fetch(getApiUrl(`/events/${id}/resources`), {
+        method: 'POST',
+        headers: getApiHeaders(token),
+        body: formData,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || 'Upload failed');
+      }
+      setUploadFile(null);
+      fetchResources();
+    } catch (err) {
+      setUploadError(err.message || 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDeleteResource = async (resId) => {
+    if (!window.confirm('Delete this resource?')) return;
+    try {
+      const res = await fetch(getApiUrl(`/events/${id}/resources/${resId}`), {
+        method: 'DELETE',
+        headers: getApiHeaders(token),
+      });
+      if (res.ok) fetchResources();
+    } catch {
+      // ignore
+    }
+  };
 
   // Determine back link based on where user came from
   const fromManageEvents = location.state?.from === 'manage-events' || location.pathname.includes('/admin');
@@ -187,6 +257,108 @@ const EventDetailPage = () => {
 
           {cancelError && (
             <div className="mt-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{cancelError}</div>
+          )}
+
+          {eventStorageEnabled && (
+            <div className="mt-8 pt-6 border-t border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-800 mb-3">Event Resources</h2>
+              {resourcesLoading ? (
+                <p className="text-gray-500 text-sm">Loading resources...</p>
+              ) : (
+                <>
+                  <div className="space-y-2 mb-4">
+                    {resources.length === 0 ? (
+                      <p className="text-gray-500 text-sm">None available</p>
+                    ) : (
+                    resources.map((r) => (
+                      <div key={r.id} className="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-gray-900">{r.filename}</span>
+                          <span className="text-xs text-gray-500">({r.category})</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const res = await fetch(getApiUrl(`/events/${id}/resources/${r.id}/download`), {
+                                headers: getApiHeaders(token),
+                              });
+                              if (!res.ok) return;
+                              const blob = await res.blob();
+                              const u = URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = u;
+                              a.download = r.filename || 'download';
+                              a.click();
+                              URL.revokeObjectURL(u);
+                            }}
+                            className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+                          >
+                            Download
+                          </button>
+                          {canViewRegistrations && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteResource(r.id)}
+                              className="text-red-600 hover:text-red-800 text-sm font-medium"
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                    )}
+                  </div>
+                  {canViewRegistrations && (
+                    <form onSubmit={handleUpload} className="flex flex-wrap items-end gap-2 p-4 bg-gray-50 rounded-lg">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Category</label>
+                        <select
+                          value={uploadCategory}
+                          onChange={(e) => setUploadCategory(e.target.value)}
+                          className="text-sm border border-gray-300 rounded px-2 py-1.5"
+                        >
+                          <option value="details">Details (docs, materials)</option>
+                          <option value="media">Media (pics, videos)</option>
+                          <option value="agreements">Agreements (private)</option>
+                        </select>
+                      </div>
+                      {uploadCategory !== 'agreements' && (
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Visibility</label>
+                          <select
+                            value={uploadVisibility}
+                            onChange={(e) => setUploadVisibility(e.target.value)}
+                            className="text-sm border border-gray-300 rounded px-2 py-1.5"
+                          >
+                            <option value="public">Public</option>
+                            <option value="participants">Participants only</option>
+                            <option value="private">Private</option>
+                          </select>
+                        </div>
+                      )}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">File</label>
+                        <input
+                          type="file"
+                          onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                          className="text-sm"
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={!uploadFile || uploading}
+                        className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+                      >
+                        {uploading ? 'Uploading...' : 'Upload'}
+                      </button>
+                      {uploadError && <span className="text-red-600 text-sm">{uploadError}</span>}
+                    </form>
+                  )}
+                </>
+              )}
+            </div>
           )}
           {token && !isAdmin && (
             <div className="mt-8 flex flex-col sm:flex-row gap-3">

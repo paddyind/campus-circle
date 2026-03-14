@@ -4,9 +4,9 @@ Campus Circle database: run migrations and manage DB using .env credentials.
 Use this to apply schema/seed to Supabase or local Postgres without opening SQL editor.
 
 Usage:
-  ./infra/scripts/run.sh db migrate   # Run 001–005 (idempotent). run.sh uses .venv + backend/requirements.txt.
+  ./infra/scripts/run.sh db migrate   # Run 001–007 (idempotent). run.sh uses .venv + backend/requirements.txt.
   ./infra/scripts/run.sh db setup     # Migrate + create demo users (Demo-Circle, Demo-BHIS) + super admin (one-time/fresh install).
-  ./infra/scripts/run.sh db reset     # Drop app schemas, then run 001–005 (fresh DB).
+  ./infra/scripts/run.sh db reset     # Drop app schemas, then run 001–007 (fresh DB).
   ./infra/scripts/run.sh db backup    # Dump to database/backup/
   ./infra/scripts/run.sh db restore <path>   # Execute SQL file (e.g. backup)
 """
@@ -58,7 +58,7 @@ def run_sql_file(conn, filepath):
             raise
 
 def run_migrations(conn, paths_only=False):
-    order = ["001_schema.sql", "002_seed.sql", "003_tenant_registry.sql", "004_demo_bhis_tenant.sql", "005_super_admins.sql"]
+    order = ["001_schema.sql", "002_seed.sql", "003_tenants_multitenancy.sql", "004_event_resources_and_features.sql"]
     for name in order:
         path = DATABASE_DIR / name
         if not path.exists():

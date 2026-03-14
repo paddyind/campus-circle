@@ -10,7 +10,7 @@ After cloning and configuring `.env`:
 ./infra/scripts/run.sh db setup
 ```
 
-This runs **migrate** (001→005) then **demo users** (Demo-Circle + Demo-BHIS) and **super admin**. One command for a full demo-ready DB.
+This runs **migrate** (001→004) then **demo users** (Demo-Circle + Demo-BHIS) and **super admin**. One command for a full demo-ready DB.
 
 ## Runner script (use this for Python)
 
@@ -32,12 +32,12 @@ This runs **migrate** (001→005) then **demo users** (Demo-Circle + Demo-BHIS) 
 | What you need | Command | Notes |
 |---------------|---------|--------|
 | **Full DB + users (first time)** | `./infra/scripts/run.sh db setup` | Migrate + demo users + super admin |
-| **Schema only** | `./infra/scripts/run.sh db migrate` | 001–005 in order |
+| **Schema only** | `./infra/scripts/run.sh db migrate` | 001–004 in order |
 | **Fresh DB (drop & re-run)** | `./infra/scripts/run.sh db reset` | Drops app schemas, then migrate |
 | **Backup / restore** | `./infra/scripts/run.sh db backup` / `restore <path>` | Backups under `database/backup/` |
 | **Demo users (both tenants)** | `./infra/scripts/setup-test-users.sh` | Or `./infra/scripts/run.sh setup_test_users` |
 | **One tenant’s users** | `./infra/scripts/run.sh setup_tenant_users demo-bhis` | After 004 for that tenant |
-| **Super admin only** | `./infra/scripts/run.sh setup_super_admin` | After 005; env: `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_PASSWORD` |
+| **Super admin only** | `./infra/scripts/run.sh setup_super_admin` | After 003; env: `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_PASSWORD` |
 | **Verify before push (CI-like)** | `./infra/scripts/ci-verify.sh` | Sanity tests + docker compose config. Add `--build` to also build images. |
 | **Docker run (demo/MVP)** | `./infra/scripts/docker-manage.sh run` | Stop all, then build + start backend + frontend dev. http://localhost:3000. |
 | **Docker dev** | `./infra/scripts/docker-manage.sh dev` | Build + recreate backend + frontend (http://localhost:3000). |
@@ -45,7 +45,9 @@ This runs **migrate** (001→005) then **demo users** (Demo-Circle + Demo-BHIS) 
 | **Docker deploy** | `./infra/scripts/docker-manage.sh deploy` | Stop all, build frontend + backend, start prod stack. |
 | **Docker migrate** | `./infra/scripts/docker-manage.sh migrate` | Runs migrations in Docker. |
 | **Android (Capacitor)** | `./infra/scripts/docker-manage.sh android` | Build web, sync, open Android Studio. Use `REACT_APP_API_URL` for device. |
+| **APK (same-WiFi)** | `./infra/scripts/docker-manage.sh apk` | Build debug APK; auto-detects LAN IP for device testing. |
 | **iOS (Capacitor)** | `./infra/scripts/docker-manage.sh ios` | Build web, sync, open Xcode. Use `REACT_APP_API_URL` for device. |
+| **Fix cross-tenant users** | `./infra/scripts/run.sh fix_tenant_users` | Remove demo_* from campus_bhis, bhis_* from campus_circle. |
 | **Pre-deploy check** | `./infra/scripts/sanity-test.sh` | Used in CI |
 
 ## SQL migrations (database/)
@@ -54,9 +56,8 @@ This runs **migrate** (001→005) then **demo users** (Demo-Circle + Demo-BHIS) 
 |------|--------|
 | 001_schema.sql | Demo-Circle app + auth schemas |
 | 002_seed.sql | Demo-Circle seed (schools, events, roles) |
-| 003_tenant_registry.sql | `public.tenants` + Demo-Circle row |
-| 004_demo_bhis_tenant.sql | Demo-BHIS schemas + seed + tenant row |
-| 005_super_admins.sql | `public.super_admins` table |
+| 003_tenants_multitenancy.sql | `public.tenants`, `public.super_admins`, Demo-BHIS schema + seed |
+| 004_event_resources_and_features.sql | `event_resources` table (both schemas), tenant feature flags |
 
 Order is fixed in `db.py`; do not skip or reorder.
 

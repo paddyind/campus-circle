@@ -9,3 +9,10 @@ pydantic
 python-jose[cryptography]
 requests
 email-validator
+python-multipart
+icalendar
+pdfplumber
+pymupdf
+pytesseract
+Pillow
+python-dateutil

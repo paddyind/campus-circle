@@ -24,15 +24,17 @@ if _app_env == "development":
 else:
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:3000", "http://localhost:80", "http://localhost"],
+        allow_origins=["http://localhost:3000", "http://localhost:80", "http://localhost", "capacitor://localhost"],
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "X-Tenant", "Accept"],
         max_age=86400,
     )
 
-app.add_middleware(AuthMiddleware)
+# TenantMiddleware needs request.state.user (set by AuthMiddleware) for user-aware tenant resolution.
+# Add TenantMiddleware first so AuthMiddleware runs first (outermost) on each request.
 app.add_middleware(TenantMiddleware)
+app.add_middleware(AuthMiddleware)
 
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(events.router, prefix="/api/events", tags=["events"])

@@ -10,8 +10,8 @@ services:
     ports:
       - "80:80"
     volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf
-      - ../frontend/build:/usr/share/nginx/html:ro
+      - ./infra/nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./frontend/build:/usr/share/nginx/html:ro
     depends_on:
       - backend
     profiles:
@@ -31,7 +31,7 @@ services:
       - REACT_APP_API_URL=http://localhost:8000/api
       - CHOKIDAR_USEPOLLING=true
     volumes:
-      - ../frontend:/app
+      - ./frontend:/app
       - /app/node_modules
     stdin_open: true
     tty: true
@@ -54,7 +54,8 @@ services:
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
     volumes:
-      - ../backend:/app
+      - ./backend:/app
+      - campus_circle_storage:/app/storage
 
   # Migrations run against SUPABASE_DB_HOST (Supabase or local db). No dependency on local db.
   migrations:
@@ -76,7 +77,7 @@ services:
         for f in /migrations/*.sql; do PGPASSWORD=$$SUPABASE_DB_PASSWORD psql -v ON_ERROR_STOP=1 -h $$SUPABASE_DB_HOST -p $$SUPABASE_DB_PORT -U $$SUPABASE_DB_USER -d $$SUPABASE_DB_NAME -f $$f; done
       "
     volumes:
-      - ../database:/migrations
+      - ./database:/migrations
     profiles:
       - migrations
 
@@ -102,3 +103,4 @@ services:
 
 volumes:
   db_data:
+  campus_circle_storage:

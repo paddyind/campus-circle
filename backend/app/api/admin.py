@@ -1,29 +1,68 @@
-from fastapi import APIRouter, HTTPException, Depends, Body
+from fastapi import APIRouter, HTTPException, Depends, Body, Request
 from app.schemas import UserProfile
-from app.core.database import execute_query, execute_query_one, execute_query_public, execute_query_one_public
+from app.core.database import (
+    execute_query,
+    execute_query_one,
+    execute_query_public,
+    execute_query_one_public,
+    execute_query_in_schema,
+    execute_query_one_in_schema,
+)
 from app.auth.dependencies import get_current_user
 from app.auth.roles import RoleChecker
-from app.core.tenant_resolution import get_all_tenants, get_allowed_tenant_slugs
+from app.core.tenant_resolution import get_all_tenants, get_allowed_tenant_slugs, is_super_admin, resolve_tenant
 import logging
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+
+def _require_tenant_access(request: Request, user_id: str) -> dict:
+    """Ensure user can access current tenant. Super Admin: all tenants. Tenant Admin: only their tenant."""
+    tenant = getattr(request.state, "tenant", None)
+    if not tenant:
+        raise HTTPException(status_code=400, detail="Tenant not resolved")
+    if is_super_admin(user_id):
+        return tenant
+    allowed = get_allowed_tenant_slugs(user_id)
+    if tenant["slug"] not in allowed:
+        raise HTTPException(status_code=403, detail="Access denied to this tenant")
+    return tenant
+
+
 @router.get("/users", response_model=list[dict])
 async def list_users(
+    request: Request,
     current_user: dict = Depends(get_current_user),
-    _: None = Depends(RoleChecker(["admin"]))
+    _: None = Depends(RoleChecker(["admin"])),
 ):
-    """List all users (admin only)"""
+    """List users for the current tenant only. Super Admin sees selected tenant; Tenant Admin sees only their tenant."""
     user_id = current_user.get("sub") or current_user.get("id")
     if not user_id:
         raise HTTPException(status_code=401, detail="User ID not found in token")
-    
+
+    # Use X-Tenant header directly as source of truth (middleware runs before auth, may not have user context)
+    x_tenant = request.headers.get("X-Tenant") or request.headers.get("x-tenant")
+    tenant = resolve_tenant(x_tenant, user_id)
+    if not tenant:
+        tenant = getattr(request.state, "tenant", None)
+    if not tenant:
+        raise HTTPException(status_code=400, detail="Tenant not resolved. Send X-Tenant header (e.g. demo-circle, demo-bhis).")
+
+    allowed = get_allowed_tenant_slugs(user_id)
+    if tenant["slug"] not in allowed:
+        raise HTTPException(status_code=403, detail="Access denied to this tenant")
+
+    schema_app = tenant.get("schema_app", "campus_circle")
+    schema_auth = tenant.get("schema_auth", "campus_circle_auth")
+    logger.info("list_users: X-Tenant=%s slug=%s schema_app=%s", x_tenant, tenant.get("slug"), schema_app)
+
     try:
-        # Get all users with their roles and profile info
-        # For email: use auth.users email (most reliable), fallback to parents.email
-        users = execute_query("""
+        users = execute_query_in_schema(
+            schema_app,
+            schema_auth,
+            """
             SELECT 
                 u.id,
                 u.role,
@@ -38,8 +77,8 @@ async def list_users(
             LEFT JOIN campus_circle.parents p ON u.id = p.id
             LEFT JOIN campus_circle.students s ON u.id = s.id
             ORDER BY u.created_at DESC
-        """)
-        
+            """,
+        )
         return [dict(user) for user in users] if users else []
     except Exception as e:
         logger.error(f"Error listing users: {e}")
@@ -47,36 +86,40 @@ async def list_users(
 
 @router.put("/users/{user_id}/role")
 async def update_user_role(
+    request: Request,
     user_id: str,
     new_role: str,
     current_user: dict = Depends(get_current_user),
-    _: None = Depends(RoleChecker(["admin"]))
+    _: None = Depends(RoleChecker(["admin"])),
 ):
-    """Update a user's role (admin only)"""
+    """Update a user's role (admin only). Scoped to current tenant."""
     admin_id = current_user.get("sub") or current_user.get("id")
     if not admin_id:
         raise HTTPException(status_code=401, detail="User ID not found in token")
-    
+
+    tenant = _require_tenant_access(request, admin_id)
+    schema_app = tenant.get("schema_app", "campus_circle")
+
     try:
-        # Validate role
-        valid_roles = ['admin', 'event_organizer', 'event_owner', 'parent', 'student']
+        valid_roles = ["admin", "event_organizer", "event_owner", "parent", "student"]
         if new_role not in valid_roles:
             raise HTTPException(status_code=400, detail=f"Invalid role. Must be one of: {', '.join(valid_roles)}")
-        
-        # Check if user exists
-        user = execute_query_one(
+
+        user = execute_query_one_in_schema(
+            schema_app,
+            tenant.get("schema_auth", "campus_circle_auth"),
             "SELECT * FROM campus_circle.users WHERE id = %s",
-            (user_id,)
+            (user_id,),
         )
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
-        
-        # Update role
-        execute_query(
+
+        execute_query_in_schema(
+            schema_app,
+            tenant.get("schema_auth", "campus_circle_auth"),
             "UPDATE campus_circle.users SET role = %s, updated_at = NOW() WHERE id = %s",
-            (new_role, user_id)
+            (new_role, user_id),
         )
-        
         return {"message": f"User role updated to {new_role}", "user_id": user_id}
     except HTTPException:
         raise
@@ -86,30 +129,36 @@ async def update_user_role(
 
 @router.delete("/users/{user_id}")
 async def delete_user(
+    request: Request,
     user_id: str,
     current_user: dict = Depends(get_current_user),
-    _: None = Depends(RoleChecker(["admin"]))
+    _: None = Depends(RoleChecker(["admin"])),
 ):
-    """Delete a user (admin only)"""
+    """Delete a user (admin only). Scoped to current tenant."""
     admin_id = current_user.get("sub") or current_user.get("id")
     if not admin_id:
         raise HTTPException(status_code=401, detail="User ID not found in token")
-    
+
+    tenant = _require_tenant_access(request, admin_id)
+    schema_app = tenant.get("schema_app", "campus_circle")
+    schema_auth = tenant.get("schema_auth", "campus_circle_auth")
+
     try:
-        # Check if user exists
-        user = execute_query_one(
+        user = execute_query_one_in_schema(
+            schema_app,
+            schema_auth,
             "SELECT * FROM campus_circle.users WHERE id = %s",
-            (user_id,)
+            (user_id,),
         )
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
-        
-        # Delete user (cascade will handle related records)
-        execute_query(
+
+        execute_query_in_schema(
+            schema_app,
+            schema_auth,
             "DELETE FROM campus_circle.users WHERE id = %s",
-            (user_id,)
+            (user_id,),
         )
-        
         return {"message": "User deleted successfully", "user_id": user_id}
     except HTTPException:
         raise

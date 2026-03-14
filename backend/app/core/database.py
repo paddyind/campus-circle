@@ -85,6 +85,26 @@ def execute_query_one_public(query, params=None):
     return results[0] if results else None
 
 
+def execute_query_in_schema(schema_app: str, schema_auth: str, query: str, params=None):
+    """Execute query with explicit tenant schemas (bypasses context). Use for tenant-scoped admin queries."""
+    q = query.replace("campus_circle.", schema_app + ".").replace("campus_circle_auth.", schema_auth + ".")
+    with get_db_connection() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(q, params)
+            if cur.description:
+                results = cur.fetchall()
+                conn.commit()
+                return results
+            conn.commit()
+            return []
+
+
+def execute_query_one_in_schema(schema_app: str, schema_auth: str, query: str, params=None):
+    """Execute query with explicit tenant schemas; return single row or None."""
+    results = execute_query_in_schema(schema_app, schema_auth, query, params)
+    return results[0] if results else None
+
+
 def user_exists_in_schema(schema_app: str, user_id: str) -> bool:
     """Check if user_id exists in the given tenant's users table (for tenant access)."""
     from psycopg2 import sql

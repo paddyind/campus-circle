@@ -59,6 +59,7 @@ For production, use Supabase's managed PostgreSQL database. Configure the connec
 - **`campus_circle.event_updates`** - Event updates/announcements
 - **`campus_circle.event_faqs`** - Event FAQs
 - **`campus_circle.event_questions`** - Parent questions about events
+- **`campus_circle.event_resources`** - Event resources (generic files: documents, media, agreements). Tenant/event-scoped. Categories: details, media, agreements. Visibility: public, participants, private. Folder organization controls access.
 
 #### Contact & Support
 
@@ -73,7 +74,7 @@ For production, use Supabase's managed PostgreSQL database. Configure the connec
 
 #### `campus_circle_auth.users`
 
-Mirror of auth users for portability. When using **Supabase**, users are created in `auth.users`; the **backend** syncs them into `campus_circle_auth.users` on registration (parent/student), and `./infra/scripts/setup-test-users.sh` syncs demo users. There is no database trigger—sync is application-driven. See [AUTH_AND_REGISTRATION.md](AUTH_AND_REGISTRATION.md). If `campus_circle_auth.users` is empty, run migrations, then `./infra/scripts/setup-test-users.sh` (with `.env` pointing at your Supabase DB).
+Mirror of auth users for portability. When using **Supabase**, users are created in `auth.users`; the **backend** syncs them into `campus_circle_auth.users` on registration (parent/student), and `./infra/scripts/run.sh setup_test_users` syncs demo users. There is no database trigger—sync is application-driven. See [AUTH_AND_REGISTRATION.md](AUTH_AND_REGISTRATION.md). If `campus_circle_auth.users` is empty, run migrations, then `./infra/scripts/run.sh setup_test_users` (with `.env` pointing at your Supabase DB).
 
 | Column | Type | Description |
 |--------|------|-------------|

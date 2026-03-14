@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 
-import { getApiUrl, getApiHeaders } from '../../../api/client';
+import { getApiUrl, getApiHeaders, getTenantSlug } from '../../../api/client';
 
 const ManageUsers = () => {
   const { token, user, currentTenant } = useSelector((state) => state.auth);
@@ -14,10 +14,10 @@ const ManageUsers = () => {
     try {
       setLoading(true);
       setError(null);
+      const tenantSlug = currentTenant?.slug || getTenantSlug();
+      const headers = { ...getApiHeaders(token), 'X-Tenant': tenantSlug };
       const response = await fetch(getApiUrl('/admin/users'), {
-        headers: {
-          ...getApiHeaders(token),
-        },
+        headers,
       });
 
       if (!response.ok) {
@@ -39,7 +39,7 @@ const ManageUsers = () => {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, currentTenant?.slug]);
 
   useEffect(() => {
     fetchUsers();
@@ -60,13 +60,12 @@ const ManageUsers = () => {
   }, [token, user, currentTenant?.slug, fetchUsers]);
 
   const handleRoleChange = async (userId, newRole) => {
+    const tenantSlug = currentTenant?.slug || getTenantSlug();
+    const headers = { ...getApiHeaders(token), 'X-Tenant': tenantSlug, 'Content-Type': 'application/json' };
     try {
       const response = await fetch(getApiUrl(`/admin/users/${userId}/role?new_role=${newRole}`), {
         method: 'PUT',
-        headers: {
-          ...getApiHeaders(token),
-          'Content-Type': 'application/json',
-        },
+        headers,
       });
 
       if (!response.ok) {
@@ -91,12 +90,12 @@ const ManageUsers = () => {
       return;
     }
 
+    const tenantSlug = currentTenant?.slug || getTenantSlug();
+    const headers = { ...getApiHeaders(token), 'X-Tenant': tenantSlug };
     try {
       const response = await fetch(getApiUrl(`/admin/users/${userId}`), {
         method: 'DELETE',
-        headers: {
-          ...getApiHeaders(token),
-        },
+        headers,
       });
 
       if (!response.ok) {

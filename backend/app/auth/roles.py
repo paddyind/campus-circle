@@ -1,7 +1,7 @@
 from fastapi import Depends, HTTPException
 from app.auth.dependencies import get_current_user
 from app.core.database import execute_query_one
-from app.core.tenant_resolution import is_super_admin, is_demo_circle_admin
+from app.core.tenant_resolution import is_super_admin
 
 def RoleChecker(allowed_roles: list[str]):
     async def get_current_user_role(user: dict = Depends(get_current_user)):
@@ -14,14 +14,11 @@ def RoleChecker(allowed_roles: list[str]):
             raise HTTPException(status_code=401, detail="User ID not found in token")
 
         try:
-            # Super admins have admin in every tenant (no per-tenant row needed)
+            # Super admins (in public.super_admins, not in tenant user list) have admin in every tenant
             if "admin" in allowed_roles and is_super_admin(user_id):
                 return user
-            # Demo-Circle (parent) admins can perform admin actions in any tenant
-            if "admin" in allowed_roles and is_demo_circle_admin(user_id):
-                return user
 
-            # Else check role in current tenant's schema
+            # Else check role in current tenant's schema (Tenant Admin must be in that tenant's users table)
             user_row = execute_query_one(
                 "SELECT role FROM campus_circle.users WHERE id = %s",
                 (user_id,)

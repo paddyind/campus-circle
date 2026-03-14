@@ -1,9 +1,17 @@
-from fastapi import APIRouter, HTTPException, Depends
+import uuid as uuid_mod
+from fastapi import APIRouter, HTTPException, Depends, Request, UploadFile, File, Form
+from fastapi.responses import FileResponse
 from app.schemas import EventCreate, EventUpdate, Event, SchoolCreate, SchoolUpdate, School
 from app.core.database import execute_query, execute_query_one
 from app.auth.roles import RoleChecker
+from app.auth.dependencies import get_current_user, get_current_user_optional
+from app.core.tenant_resolution import get_tenant_feature
+from app.core.storage import save_resource, get_resource_path, delete_resource as storage_delete
 
 router = APIRouter()
+
+# Max file size 50MB for prototype
+MAX_ATTACHMENT_SIZE = 50 * 1024 * 1024
 
 def _event_to_response(row):
     """Build event dict with ISO start_time/end_time for API response."""
@@ -287,3 +295,350 @@ async def get_event_registrations(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching registrations: {str(e)[:100]}")
+
+
+# ----- Event Resources (tenant/event-scoped storage for all file types) -----
+
+def _check_event_resources_feature(request: Request):
+    tenant = getattr(request.state, "tenant", None) or {}
+    if not get_tenant_feature(tenant, "event_storage"):
+        raise HTTPException(status_code=403, detail="Event resources are disabled for this tenant")
+
+
+def _user_can_upload(request: Request, user: dict) -> bool:
+    role = user.get("role") or ""
+    return role in ("admin", "event_organizer", "event_owner")
+
+
+def _user_is_registered(user_id: str, event_id: str) -> bool:
+    if not user_id:
+        return False
+    # Student: s.auth_user_id = user_id. Parent: p.id = user_id (parent id is auth user id)
+    r = execute_query_one(
+        """SELECT 1 FROM campus_circle.event_registrations er
+           JOIN campus_circle.students s ON er.student_id = s.id
+           WHERE er.event_id = %s
+             AND (s.auth_user_id = %s
+                  OR EXISTS (SELECT 1 FROM campus_circle.parent_students ps
+                             WHERE ps.student_id = s.id AND ps.parent_id = %s))""",
+        (event_id, user_id, user_id),
+    )
+    return bool(r)
+
+
+def _can_access_resource(res: dict, request: Request, user: dict | None) -> bool:
+    vis = res.get("visibility", "participants")
+    if vis == "public":
+        return True
+    if not user:
+        return False
+    user_id = user.get("sub") or user.get("id")
+    role = user.get("role") or ""
+    if role in ("admin", "event_organizer", "event_owner"):
+        return True
+    if vis == "participants":
+        return _user_is_registered(user_id, res["event_id"])
+    return False  # private
+
+
+@router.post("/{event_id}/resources")
+async def upload_resource(
+    event_id: str,
+    request: Request,
+    file: UploadFile = File(...),
+    category: str = Form("details"),
+    visibility: str = Form("participants"),
+    current_user: dict = Depends(get_current_user),
+    _=Depends(RoleChecker(["admin", "event_organizer", "event_owner"])),
+):
+    """Upload a resource (document, media, agreement) for an event. Agreements category forces visibility=private."""
+    _check_event_resources_feature(request)
+    if not _user_can_upload(request, current_user):
+        raise HTTPException(status_code=403, detail="Not authorized to upload")
+    try:
+        uuid_mod.UUID(event_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid event ID")
+    if category not in ("details", "media", "agreements"):
+        raise HTTPException(status_code=400, detail="Category must be details, media, or agreements")
+    if category == "agreements":
+        visibility = "private"
+    elif visibility not in ("public", "participants", "private"):
+        visibility = "participants"
+    event = execute_query_one("SELECT id FROM campus_circle.events WHERE id = %s", (event_id,))
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    content = await file.read()
+    if len(content) > MAX_ATTACHMENT_SIZE:
+        raise HTTPException(status_code=413, detail="File too large (max 50MB)")
+    tenant = getattr(request.state, "tenant", None) or {}
+    tenant_slug = tenant.get("slug", "demo-circle")
+    user_id = current_user.get("sub") or current_user.get("id")
+    storage_path = save_resource(tenant_slug, event_id, category, file.filename or "file", content)
+    execute_query(
+        """INSERT INTO campus_circle.event_resources
+           (event_id, category, visibility, storage_path, filename, mime_type, size_bytes, created_by)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+        (event_id, category, visibility, storage_path, file.filename or "file", file.content_type, len(content), user_id),
+    )
+    row = execute_query_one(
+        """SELECT id, event_id, category, visibility, filename, mime_type, size_bytes, created_at
+           FROM campus_circle.event_resources
+           WHERE storage_path = %s ORDER BY created_at DESC LIMIT 1""",
+        (storage_path,),
+    )
+    return dict(row) if row else {"storage_path": storage_path}
+
+
+@router.get("/{event_id}/resources")
+async def list_resources(
+    event_id: str,
+    request: Request,
+    _user: dict | None = Depends(get_current_user_optional),
+):
+    """List resources for an event. Returns only those the user can access (by visibility)."""
+    _check_event_resources_feature(request)
+    try:
+        uuid_mod.UUID(event_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid event ID")
+    event = execute_query_one("SELECT id FROM campus_circle.events WHERE id = %s", (event_id,))
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    rows = execute_query(
+        """SELECT id, event_id, category, visibility, filename, mime_type, size_bytes, created_at
+           FROM campus_circle.event_resources WHERE event_id = %s ORDER BY category, filename""",
+        (event_id,),
+    )
+    user = _user
+    out = []
+    for r in rows:
+        d = dict(r)
+        if _can_access_resource(d, request, user):
+            d["id"] = str(d["id"])
+            d["event_id"] = str(d["event_id"])
+            if d.get("created_at") and hasattr(d["created_at"], "isoformat"):
+                d["created_at"] = d["created_at"].isoformat()
+            out.append(d)
+    return out
+
+
+@router.get("/{event_id}/resources/{resource_id}/download")
+async def download_resource(
+    event_id: str,
+    resource_id: str,
+    request: Request,
+    _user: dict | None = Depends(get_current_user_optional),
+):
+    """Download a resource. Access controlled by visibility."""
+    _check_event_resources_feature(request)
+    try:
+        uuid_mod.UUID(event_id)
+        uuid_mod.UUID(resource_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid ID")
+    row = execute_query_one(
+        """SELECT id, event_id, category, visibility, storage_path, filename
+           FROM campus_circle.event_resources WHERE id = %s AND event_id = %s""",
+        (resource_id, event_id),
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Resource not found")
+    d = dict(row)
+    user = _user
+    if not _can_access_resource(d, request, user):
+        raise HTTPException(status_code=403, detail="Access denied")
+    path = get_resource_path(d["storage_path"])
+    if not path or not path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(path, filename=d["filename"] or "download")
+
+
+@router.delete("/{event_id}/resources/{resource_id}")
+async def delete_resource(
+    event_id: str,
+    resource_id: str,
+    request: Request,
+    _=Depends(RoleChecker(["admin", "event_organizer", "event_owner"])),
+):
+    """Delete a resource (admin/organizer/owner only)."""
+    _check_event_resources_feature(request)
+    try:
+        uuid_mod.UUID(event_id)
+        uuid_mod.UUID(resource_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid ID")
+    row = execute_query_one(
+        "SELECT id, storage_path FROM campus_circle.event_resources WHERE id = %s AND event_id = %s",
+        (resource_id, event_id),
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Resource not found")
+    execute_query("DELETE FROM campus_circle.event_resources WHERE id = %s", (resource_id,))
+    storage_delete(row["storage_path"])
+    return {"deleted": True}
+
+
+# ----- Calendar import (iCal/ICS, PDF, images) -----
+
+def _upsert_events(events: list[dict], school_id: str | None) -> tuple[int, int]:
+    """Insert or update events. Returns (created, updated)."""
+    created = 0
+    updated = 0
+    for ev in events:
+        title = ev.get("title") or ""
+        start_iso = ev.get("start_time")
+        if not title or not start_iso:
+            continue
+        end_iso = ev.get("end_time")
+        description = ev.get("description")
+        location = ev.get("location")
+        existing = execute_query_one(
+            """SELECT id FROM campus_circle.events
+               WHERE title = %s AND start_time = %s::timestamptz LIMIT 1""",
+            (title, start_iso),
+        )
+        if existing:
+            execute_query(
+                """UPDATE campus_circle.events SET description = COALESCE(%s, description),
+                   end_time = COALESCE(%s::timestamptz, end_time), location = COALESCE(%s, location),
+                   school_id = COALESCE(%s::uuid, school_id), updated_at = now()
+                   WHERE id = %s""",
+                (description, end_iso, location, school_id, str(existing["id"])),
+            )
+            updated += 1
+        else:
+            execute_query(
+                """INSERT INTO campus_circle.events (school_id, title, description, start_time, end_time, location, is_published)
+                   VALUES (%s, %s, %s, %s::timestamptz, %s::timestamptz, %s, TRUE)""",
+                (school_id or None, title, description, start_iso, end_iso, location),
+            )
+            created += 1
+    return created, updated
+
+
+@router.post("/import-calendar")
+async def import_calendar(
+    request: Request,
+    file: UploadFile = File(...),
+    school_id: str | None = Form(None),
+    dry_run: bool = Form(False),
+    current_user: dict = Depends(get_current_user),
+    _=Depends(RoleChecker(["admin", "event_organizer", "event_owner"])),
+):
+    """Import events from iCal (.ics), PDF, or image (PNG/JPEG). dry_run=True: extract only, no DB write; returns extracted + debug_log."""
+    import logging
+    logger = logging.getLogger(__name__)
+
+    tenant = getattr(request.state, "tenant", None) or {}
+    if not get_tenant_feature(tenant, "calendar_import"):
+        raise HTTPException(status_code=403, detail="Calendar import is disabled for this tenant")
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File too large (max 5MB)")
+    filename = (file.filename or "").lower()
+    events: list[dict] = []
+    debug_log: list[str] = []
+
+    if filename.endswith((".ics", ".ical")):
+        try:
+            from icalendar import Calendar
+        except ImportError:
+            raise HTTPException(status_code=503, detail="Calendar import not available")
+        try:
+            cal = Calendar.from_ical(content)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid iCal file: {str(e)[:80]}")
+        for comp in cal.walk():
+            if comp.name != "VEVENT":
+                continue
+            title = comp.get("summary")
+            if not title:
+                title = str(comp.get("dtstart", ""))
+            if not title:
+                continue
+            dtstart = comp.get("dtstart")
+            dtend = comp.get("dtend")
+            if not dtstart:
+                continue
+            start_dt = dtstart.dt if hasattr(dtstart, "dt") else dtstart
+            end_dt = dtend.dt if dtend and hasattr(dtend, "dt") else None
+            if hasattr(start_dt, "isoformat"):
+                start_iso = start_dt.isoformat()
+            else:
+                start_iso = str(start_dt)
+            if end_dt and hasattr(end_dt, "isoformat"):
+                end_iso = end_dt.isoformat()
+            else:
+                end_iso = None
+            loc = comp.get("location")
+            location = str(loc) if loc else None
+            desc = comp.get("description")
+            description = str(desc) if desc else None
+            events.append({"title": title, "start_time": start_iso, "end_time": end_iso, "description": description, "location": location})
+        debug_log = [f"[iCal] Parsed {len(events)} events"]
+    elif filename.endswith(".pdf"):
+        from app.core.calendar_extract import (
+            extract_from_pdf_grid,
+            extract_from_pdf,
+            extract_from_pdf_pymupdf,
+            extract_from_pdf_ocr,
+        )
+        try:
+            # Try strategies in order: grid table -> pdfplumber text -> PyMuPDF -> OCR (for scanned PDFs)
+            grid_events, debug_log = extract_from_pdf_grid(content, yellow_only=False)
+            if grid_events:
+                events = [
+                    {"title": e["title"], "start_time": e["start_time"], "end_time": e.get("end_time"), "description": None}
+                    for e in grid_events
+                ]
+                debug_log.append("[Strategy] Used: grid table")
+            else:
+                text_events, debug_log = extract_from_pdf(content, debug_log)
+                if text_events:
+                    events = text_events
+                    debug_log.append("[Strategy] Used: pdfplumber text")
+                else:
+                    pymupdf_events, debug_log = extract_from_pdf_pymupdf(content, debug_log)
+                    if pymupdf_events:
+                        events = pymupdf_events
+                        debug_log.append("[Strategy] Used: PyMuPDF")
+                    else:
+                        ocr_events, debug_log = extract_from_pdf_ocr(content, debug_log)
+                        if ocr_events:
+                            events = ocr_events
+                            debug_log.append("[Strategy] Used: OCR (scanned PDF)")
+                        else:
+                            debug_log.append("[Strategy] All methods returned 0 events")
+        except Exception as e:
+            debug_log.append(f"[Error] {str(e)}")
+            raise HTTPException(status_code=400, detail=f"Could not extract events from PDF: {str(e)[:100]}")
+    elif any(filename.endswith(ext) for ext in (".png", ".jpg", ".jpeg")):
+        from app.core.calendar_extract import extract_from_image
+        try:
+            events = extract_from_image(content)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Could not extract events from image: {str(e)[:100]}")
+        debug_log = [f"[Image OCR] Extracted {len(events)} events"]
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported format. Use .ics, .ical, .pdf, .png, or .jpg",
+        )
+
+    # Log to backend container (visible in docker logs / stdout)
+    for line in debug_log:
+        logger.info(line)
+
+    if dry_run:
+        return {
+            "dry_run": True,
+            "message": "Preview only – no events saved",
+            "extracted_count": len(events),
+            "extracted": events,
+        }
+
+    if not events:
+        return {"created": 0, "updated": 0, "message": "No events found in file"}
+    created, updated = _upsert_events(events, school_id)
+    return {"created": created, "updated": updated}

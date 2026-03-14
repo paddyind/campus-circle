@@ -129,7 +129,7 @@ test_migrations() {
             log_success "Found $sql_count SQL file(s) in database/"
             if [ -f "$database_dir/001_schema.sql" ] && [ -f "$database_dir/002_seed.sql" ]; then
                 log_success "Expected schema/seed files (001, 002) present"
-                for m in 003_tenant_registry.sql 004_demo_bhis_tenant.sql 005_super_admins.sql; do
+                for m in 003_tenants_multitenancy.sql 004_event_resources_and_features.sql; do
                     if [ -f "$database_dir/$m" ]; then
                         log_success "Migration $m present"
                     else

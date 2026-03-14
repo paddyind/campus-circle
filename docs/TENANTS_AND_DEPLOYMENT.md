@@ -12,7 +12,7 @@ From project root, with `.env` configured for your DB:
    ```bash
    ./infra/scripts/run.sh db setup
    ```
-   This uses the project’s `.venv` and `backend/requirements.txt` (created automatically if missing), runs migrations 001→005, then demo users (Demo-Circle + Demo-BHIS) and super admin.
+   This uses the project’s `.venv` and `backend/requirements.txt` (created automatically if missing), runs migrations 001→004, then demo users (Demo-Circle + Demo-BHIS) and super admin.
 
 2. **Or step by step:**  
    `./infra/scripts/run.sh db migrate` → then `./infra/scripts/run.sh setup_test_users` and `./infra/scripts/run.sh setup_super_admin` (or use `run.sh db setup` to do all at once).
@@ -42,7 +42,7 @@ For a full list of scripts and when to use them, see [infra/scripts/README.md](.
 - **App schema:** `campus_circle`  
 - **Auth schema:** `campus_circle_auth`  
 - **Is internal:** Yes (demo data, admin privileges to access all tenants and manage tenant settings).  
-- **Registry:** One row in `public.tenants` (migration `003_tenant_registry.sql`).
+- **Registry:** One row in `public.tenants` (migration `003_tenants_multitenancy.sql`).
 
 Demo-Circle admins manage **only the Demo-Circle tenant** (users, schools, events, etc.). They do not see the tenant switcher and cannot switch to other tenants.
 
@@ -53,12 +53,12 @@ Demo-Circle admins manage **only the Demo-Circle tenant** (users, schools, event
 - **App schema:** `campus_bhis`  
 - **Auth schema:** `campus_bhis_auth`  
 - **Is internal:** No.  
-- **Registry:** Inserted by migration `004_demo_bhis_tenant.sql`.  
+- **Registry:** Inserted by migration `003_tenants_multitenancy.sql`.  
 - **Data:** Same structure as Demo-Circle; seed data uses BHIS-prefixed names (e.g. BHIS_Annual Science Fair, BHIS Greenwood High School). Demo users: `bhis_admin@campuscircle.com`, `bhis_parent@campuscircle.com`, `bhis_student@campuscircle.com` (created by `setup-test-users.sh`).
 
 ### 1.4 Super Admin (login across all tenants, same role everywhere)
 
-- **Table:** `public.super_admins` — one row per Supabase auth user id (migration `005_super_admins.sql`).  
+- **Table:** `public.super_admins` — one row per Supabase auth user id (migration `003_tenants_multitenancy.sql`).  
 - **Behaviour:** Super admins can log in once and **switch to any tenant** via the tenant switcher. They have **admin role in every tenant** without needing a user row in that tenant’s schema.  
 - **Setup:** Run `./infra/scripts/run.sh setup_super_admin` (after migrations). Creates `superadmin@campuscircle.com` in Supabase Auth and adds their id to `public.super_admins`. Optional env: `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_PASSWORD`, `SUPER_ADMIN_FULL_NAME`.
 
@@ -113,8 +113,8 @@ Demo-Circle admins manage **only the Demo-Circle tenant** (users, schools, event
 **Scripts:** Run migrations first so the tenant’s auth schema exists. Then create/mirror users:
 
 - `./infra/scripts/setup-test-users.sh` — creates Demo-Circle and Demo-BHIS users (if `campus_bhis_auth` exists).
-- `./infra/scripts/run.sh setup_tenant_users demo-bhis` — creates or syncs only Demo-BHIS users into `campus_bhis_auth` / `campus_bhis` (run after `004_demo_bhis_tenant.sql`).
-- `./infra/scripts/run.sh setup_super_admin` — creates the super-admin user in Supabase Auth and adds their id to `public.super_admins` (run after 005). Env: `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_PASSWORD`.
+- `./infra/scripts/run.sh setup_tenant_users demo-bhis` — creates or syncs only Demo-BHIS users into `campus_bhis_auth` / `campus_bhis` (run after `003_tenants_multitenancy.sql`).
+- `./infra/scripts/run.sh setup_super_admin` — creates the super-admin user in Supabase Auth and adds their id to `public.super_admins` (run after 003). Env: `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_PASSWORD`.
 
 ---
 
@@ -150,10 +150,9 @@ Demo-Circle admins manage **only the Demo-Circle tenant** (users, schools, event
 |----------|---------|
 | `database/001_schema.sql` | Full schema for one tenant (app + auth). **Template** for a new tenant’s schema. |
 | `database/002_seed.sql` | Demo/seed data (schools, classes, roles, events). Reusable when provisioning a new tenant. |
-| `database/003_tenant_registry.sql` | Creates `public.tenants` and inserts Demo-Circle. Run after 001 and 002. |
-| `database/004_demo_bhis_tenant.sql` | Creates Demo-BHIS schemas (`campus_bhis`, `campus_bhis_auth`), BHIS-prefixed seed data, and inserts Demo-BHIS into `public.tenants`. Run after 003. |
-| `database/005_super_admins.sql` | Creates `public.super_admins(auth_user_id)`. Users listed here can access all tenants and have admin role in every tenant (no per-tenant user row). |
-| `infra/scripts/setup-test-users.sh` | Demo users for **Demo-Circle** and **Demo-BHIS** in Supabase Auth and per-tenant auth/app schemas. Run **after** migrations (004 for BHIS). |
+| `database/003_tenants_multitenancy.sql` | Creates `public.tenants`, `public.super_admins`, Demo-BHIS schemas, and BHIS seed data. Run after 001 and 002. |
+| `database/004_event_resources_and_features.sql` | Creates `event_resources` table (both schemas) and tenant feature flags. Run after 003. |
+| `infra/scripts/run.sh setup_test_users` | Demo users for **Demo-Circle** and **Demo-BHIS** in Supabase Auth and per-tenant auth/app schemas. Run **after** migrations (003 for BHIS). |
 | `infra/scripts/setup_tenant_users.py <slug>` | Create/sync users for **one tenant** only (e.g. `demo-bhis`). Use after migrations so that tenant’s auth schema exists; ensures users appear in e.g. `campus_bhis_auth.users`. |
 
 For **Demo-Circle**, schemas are `campus_circle` and `campus_circle_auth`. For **Demo-BHIS**, `campus_bhis` and `campus_bhis_auth`. Each tenant’s auth schema holds only the users that belong to that tenant (mirrored from Supabase Auth).
@@ -257,7 +256,7 @@ The React frontend has been integrated with **Capacitor** to allow building it a
 ### 4.5 Database and Auth
 
 - Keep Supabase (PostgreSQL + Auth). Run `./infra/scripts/run.sh db migrate` (or `./infra/scripts/docker-manage.sh migrate`) including 001–004.  
-- Test data: `002_seed.sql` and `004_demo_bhis_tenant.sql` for seed data; `setup-test-users.sh` creates Demo-Circle and Demo-BHIS demo users.
+- Test data: `002_seed.sql` and `003_tenants_multitenancy.sql` for seed data; `run.sh setup_test_users` creates Demo-Circle and Demo-BHIS demo users.
 
 ### 4.6 CI and Test Data
 

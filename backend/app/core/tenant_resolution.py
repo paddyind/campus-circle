@@ -86,6 +86,19 @@ def resolve_tenant_by_email(email: str) -> Optional[dict]:
     return tenants[0] if tenants else None
 
 
+def get_tenant_feature(tenant: Optional[dict], feature_name: str) -> bool:
+    """Check if a feature is enabled for the tenant. Default True for internal/base tenant."""
+    if not tenant:
+        return False
+    features = (tenant.get("settings") or {}).get("features") or {}
+    if not isinstance(features, dict):
+        return True  # Unknown format: allow by default
+    val = features.get(feature_name)
+    if val is None:
+        return True  # Not set: allow for backward compat
+    return bool(val)
+
+
 def resolve_tenant(x_tenant_slug: Optional[str], user_id: Optional[str]) -> Optional[dict]:
     """
     Resolve tenant for request. Returns { id, name, slug, schema_app, schema_auth, is_internal, settings }

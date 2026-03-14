@@ -46,7 +46,7 @@ export const loginUser = createAsyncThunk('auth/loginUser', async (credentials, 
       const tenantData = await tenantsRes.json();
       allowedSlugs = tenantData.allowed_slugs || [];
       if (profile?.is_super_admin) {
-        currentTenant = { slug: 'demo-circle', name: 'Demo-Circle' };
+        currentTenant = { ...(tenantData.tenant || {}), slug: 'demo-circle', name: 'Demo-Circle' };
         setTenantSlug('demo-circle');
       } else {
         currentTenant = tenantData.tenant || null;
@@ -312,7 +312,7 @@ export const bootstrapAuth = createAsyncThunk(
       if (res.ok) {
         const data = await res.json();
         allowedTenantSlugs = data.allowed_slugs || [];
-        currentTenant = { slug: 'demo-circle', name: 'Demo-Circle' };
+        currentTenant = { ...(data.tenant || {}), slug: 'demo-circle', name: 'Demo-Circle' };
       }
     } else if (tenantsRes.ok) {
       const data = await tenantsRes.json();

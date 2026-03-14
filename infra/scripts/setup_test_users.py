@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
 Create admin, parent, and student users in Supabase Auth and mirror into
-campus_circle_auth.users and campus_circle. Run from project root; loads .env.
+campus_circle_auth and campus_bhis. Run from project root; loads .env.
 Usage: ./infra/scripts/run.sh setup_test_users
+       ./infra/scripts/run.sh setup_test_users --disable-email-confirmation  (show Supabase steps only)
 """
 import os
 import sys
@@ -170,6 +171,18 @@ def create_user(email, password, full_name, role, user_type, phone=None, dob=Non
 
 
 def main():
+    if "--disable-email-confirmation" in sys.argv:
+        load_dotenv()
+        url = os.environ.get("SUPABASE_URL", "")
+        print("🔧 Email Confirmation Setup")
+        print("=" * 60)
+        print("\nDisable email confirmation in Supabase for development:\n")
+        print("1. Go to https://supabase.com/dashboard → your project")
+        print("2. Authentication → Settings → Email Auth")
+        print("3. Turn OFF 'Enable email confirmations' → Save")
+        print("\nThen run: ./infra/scripts/run.sh setup_test_users")
+        sys.exit(0)
+
     admin_email = os.environ.get("TEST_ADMIN_EMAIL", "demo_admin@campuscircle.com")
     parent_email = os.environ.get("TEST_PARENT_EMAIL", "demo_parent@campuscircle.com")
     student_email = os.environ.get("TEST_STUDENT_EMAIL", "demo_student@campuscircle.com")
@@ -194,7 +207,7 @@ def main():
         print(f"   ❌ Cannot connect to DB: {e}")
         sys.exit(1)
 
-    # Demo-BHIS requires migration 004 (campus_bhis_auth schema)
+    # Demo-BHIS requires migration 003 (campus_bhis_auth schema)
     bhis_schema_ok = False
     try:
         db_execute("SELECT 1 FROM campus_bhis_auth.users LIMIT 0")

@@ -5,9 +5,13 @@ A modern, production-ready platform connecting schools, parents, and students th
 ## 🚀 Features
 
 - **Event Management**: Create, view, and register for campus events
+- **Event Resources**: Per-tenant, per-event files (documents, media, agreements). Folder/category organization controls access (public/participants/private).
+- **Calendar Import**: Upload iCal/ICS to bulk-add or update events
+- **Calendar View**: Month view with list toggle and split-panel details
+- **Tenant Settings**: Enable/disable features per tenant (event storage, calendar import, calendar view)
 - **Parent-Student Communication**: Seamless communication between parents and students
 - **User Dashboards**: Separate dashboards for parents and students
-- **Admin Features**: Manage events, users, and contact submissions
+- **Admin Features**: Manage events, users, schools, contact submissions, and tenant settings
 - **Authentication**: Secure JWT-based authentication via Supabase
 - **Responsive Design**: Modern UI built with React and Tailwind CSS
 
@@ -83,7 +87,7 @@ From project root, use the script that runs with the project’s `backend/requir
 ./infra/scripts/run.sh db setup
 ```
 
-This applies migrations **001→005** (schema, seed, tenant registry, Demo-BHIS tenant, super_admins) and creates **demo users** (Demo-Circle + Demo-BHIS) and the **super admin** account. One command for a full demo-ready DB.
+This applies migrations **001→004** (schema, seed, tenants/multitenancy, event_resources) and creates **demo users** (Demo-Circle + Demo-BHIS) and the **super admin** account. One command for a full demo-ready DB.
 
 - **Supabase:** Set `.env` with `SUPABASE_DB_HOST=db.xxxx.supabase.co` (and other DB vars).
 - **Local Docker:** Use `SUPABASE_DB_HOST=localhost` (or `db` if running from inside Docker), then run the command above. Alternatively: `./infra/scripts/docker-manage.sh migrate` then `./infra/scripts/run.sh db setup`.
@@ -97,7 +101,7 @@ For step-by-step or other commands (migrate only, one tenant, backup), see [infr
 For development, disable email confirmation to avoid bounce issues and simplify testing:
 
 ```bash
-./infra/scripts/setup-test-users.sh --disable-email-confirmation
+./infra/scripts/run.sh setup_test_users --disable-email-confirmation
 ```
 
 This will guide you through disabling email confirmation in Supabase Dashboard.
@@ -113,7 +117,54 @@ This will guide you through disabling email confirmation in Supabase Dashboard.
 ./infra/scripts/docker-manage.sh dev
 ```
 
-### 5. Access the Application
+### 5. Deploy to Docker Desktop (local validation)
+
+Use these steps to deploy and validate on Docker Desktop:
+
+#### Step 1: Apply database migrations
+
+If using **Supabase** (recommended):
+```bash
+# .env must have SUPABASE_DB_HOST, SUPABASE_DB_PORT, SUPABASE_DB_NAME, SUPABASE_DB_USER, SUPABASE_DB_PASSWORD
+./infra/scripts/run.sh db migrate
+```
+
+If using **local PostgreSQL** in Docker:
+```bash
+# Start DB first
+docker compose -f infra/docker-compose.yml --project-directory . --profile local-db up -d db
+
+# Update .env: SUPABASE_DB_HOST=localhost (or db when connecting from backend container)
+./infra/scripts/run.sh db migrate
+```
+
+#### Step 2: (First-time only) Create demo users and super admin
+
+```bash
+./infra/scripts/run.sh db setup
+```
+
+#### Step 3: Build and run the app
+
+```bash
+./infra/scripts/docker-manage.sh run
+```
+
+This builds backend + frontend, starts services, and serves at **http://localhost:3000**.
+
+#### Step 4: Verify
+
+- Open http://localhost:3000
+- Log in (see Help page for demo credentials)
+- Admin → Manage Events → Import Calendar (upload .ics file)
+- Admin → Manage Tenants → toggle Event Resources, Calendar Import, Calendar View
+- View an event → Event Resources section (upload/download)
+
+#### Calendar import format
+
+Use an **iCal (.ics)** file. Export from Google Calendar, Outlook, or school calendar systems. PDF or image calendars are not supported; export as .ics instead.
+
+### 6. Access the Application
 
 - **Frontend (dev/demo):** http://localhost:3000
 - **Backend API:** http://localhost:8000

@@ -106,6 +106,19 @@ const ManageTenants = () => {
   }
 
   const selectedTenant = tenants.find((t) => t.slug === selectedSlug);
+  const features = settings?.features || {};
+  const eventStorage = features.event_storage !== false;
+  const calendarImport = features.calendar_import !== false;
+  const calendarView = features.calendar_view !== false;
+
+  const handleFeatureToggle = (key, value) => {
+    const nextFeatures = { ...features, [key]: value };
+    const next = { ...settings, features: nextFeatures };
+    setSettings(next);
+    setRawJson(JSON.stringify(next, null, 2));
+    setJsonError(null);
+    setSaveSuccess(false);
+  };
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -142,6 +155,49 @@ const ManageTenants = () => {
                 Editing settings for <strong>{selectedTenant.name}</strong>. App schema: {selectedTenant.schema_app || '—'}
               </p>
             )}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
+            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Feature toggles</h2>
+          </div>
+          <div className="p-6">
+            <p className="text-sm text-gray-600 mb-4">
+              Enable or disable features for this tenant. Base/Parent (Demo) tenant has all enabled by default.
+            </p>
+            <div className="space-y-4 mb-6">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={eventStorage}
+                  onChange={(e) => handleFeatureToggle('event_storage', e.target.checked)}
+                  className="rounded border-gray-300 h-4 w-4"
+                />
+                <span className="text-sm font-medium text-gray-900">Event Resources</span>
+                <span className="text-xs text-gray-500">Documents, media, agreements per event (generic file storage)</span>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={calendarImport}
+                  onChange={(e) => handleFeatureToggle('calendar_import', e.target.checked)}
+                  className="rounded border-gray-300 h-4 w-4"
+                />
+                <span className="text-sm font-medium text-gray-900">Calendar Import</span>
+                <span className="text-xs text-gray-500">Upload iCal/ICS to add or update events</span>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={calendarView}
+                  onChange={(e) => handleFeatureToggle('calendar_view', e.target.checked)}
+                  className="rounded border-gray-300 h-4 w-4"
+                />
+                <span className="text-sm font-medium text-gray-900">Calendar View</span>
+                <span className="text-xs text-gray-500">Month view and split-panel event list</span>
+              </label>
+            </div>
           </div>
         </div>
 
