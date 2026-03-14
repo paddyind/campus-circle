@@ -49,9 +49,9 @@ jobs:
       - name: Verify DB migrations and scripts
         run: |
           cd "$REPO_ROOT"
-          test -f database/001_schema.sql && test -f database/005_super_admins.sql || exit 1
+          test -f database/001_schema.sql && test -f database/003_tenants_multitenancy.sql && test -f database/004_event_resources_and_features.sql || exit 1
           python infra/scripts/db.py 2>&1 | grep -q "migrate\|setup" || exit 1
-          echo "Migrations 001-005 and db.py commands OK"
+          echo "Migrations 001-004 and db.py commands OK"
 
       - name: Run sanity tests
         run: |
