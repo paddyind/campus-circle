@@ -6,7 +6,7 @@ Test Campus Circle on Android and iPad devices on the same WiFi as your developm
 
 - **Android**: Android Studio (for first-time setup); Java/JDK; `adb` for installing APK
 - **iOS**: Mac with Xcode; Apple Developer account for physical device
-- **Backend**: Docker stack or backend running on port 8000
+- **Backend**: Docker stack or backend reachable on host port **`3101`** (default; override via `CAMPUS_HOST_BACKEND_PORT` in `.env`)
 - **Same WiFi**: Machine, Android device, and iPad on the same network
 
 ## 1. Start the backend (Docker)
@@ -15,8 +15,8 @@ Test Campus Circle on Android and iPad devices on the same WiFi as your developm
 ./infra/scripts/docker-manage.sh run
 ```
 
-- Web app: http://localhost:3000  
-- Backend API: http://localhost:8000  
+- Web app: http://localhost:3100  
+- Backend API: http://localhost:3101  
 
 ## 2. Build Android APK (same-WiFi)
 
@@ -34,7 +34,7 @@ Output APK path:
 If auto-detection fails, set `REACT_APP_API_URL`:
 
 ```bash
-REACT_APP_API_URL=http://192.168.1.10:8000/api ./infra/scripts/docker-manage.sh apk
+REACT_APP_API_URL=http://192.168.1.10:3101/api ./infra/scripts/docker-manage.sh apk
 ```
 
 Replace `192.168.1.10` with your Mac’s LAN IP: System Settings → Network → Wi‑Fi → your IP.
@@ -55,7 +55,7 @@ Replace `192.168.1.10` with your Mac’s LAN IP: System Settings → Network →
 1. Use your Mac’s LAN IP for `REACT_APP_API_URL`:
 
    ```bash
-   REACT_APP_API_URL=http://192.168.1.10:8000/api ./infra/scripts/docker-manage.sh ios
+   REACT_APP_API_URL=http://192.168.1.10:3101/api ./infra/scripts/docker-manage.sh ios
    ```
 
 2. Xcode opens. Choose your physical iPad as the run target.

@@ -17,9 +17,21 @@ COMPOSE_FILE="$PROJECT_ROOT/infra/docker-compose.yml"
 SERVICES=("nginx" "frontend" "backend" "db" "migrations")
 CONTAINER_NAMES=("campus-circle-frontend" "campus-circle-frontend-dev" "campus-circle-backend" "campus-circle-db" "campus-circle-migrations")
 
+# Published host ports (defaults avoid clashes with other apps; override in .env)
+if [ -f "$PROJECT_ROOT/.env" ]; then
+  set -a
+  # shellcheck source=/dev/null
+  . "$PROJECT_ROOT/.env"
+  set +a
+fi
+CAMPUS_HOST_FRONTEND_PORT="${CAMPUS_HOST_FRONTEND_PORT:-3100}"
+CAMPUS_HOST_BACKEND_PORT="${CAMPUS_HOST_BACKEND_PORT:-3101}"
+CAMPUS_HOST_DB_PORT="${CAMPUS_HOST_DB_PORT:-3110}"
+CAMPUS_HOST_NGINX_PORT="${CAMPUS_HOST_NGINX_PORT:-3108}"
+
 # API URL for mobile: Android emulator sees host as 10.0.2.2; physical devices on same WiFi need host's LAN IP
-ANDROID_EMULATOR_API="http://10.0.2.2:8000/api"
-IOS_SIMULATOR_API="http://localhost:8000/api"
+ANDROID_EMULATOR_API="http://10.0.2.2:${CAMPUS_HOST_BACKEND_PORT}/api"
+IOS_SIMULATOR_API="http://localhost:${CAMPUS_HOST_BACKEND_PORT}/api"
 
 # Get host LAN IP for same-WiFi testing (Android/iPad physical devices)
 get_lan_api_url() {
@@ -30,7 +42,7 @@ get_lan_api_url() {
     else
         ip=$(hostname -I 2>/dev/null | awk '{print $1}')
     fi
-    [ -n "$ip" ] && echo "http://${ip}:8000/api" || echo ""
+    [ -n "$ip" ] && echo "http://${ip}:${CAMPUS_HOST_BACKEND_PORT}/api" || echo ""
 }
 
 usage() {
@@ -46,15 +58,15 @@ usage() {
     echo "  shell [svc]        Shell in container."
     echo "  validate           Validate docker-compose."
     echo "  migrate            Run database migrations."
-    echo "  run                Stop all, then start dev (backend + frontend). http://localhost:3000"
-    echo "  dev                Build + recreate backend + frontend dev. http://localhost:3000 | Backend :8000"
+    echo "  run                Stop all, then start dev (backend + frontend). Frontend :${CAMPUS_HOST_FRONTEND_PORT} Backend :${CAMPUS_HOST_BACKEND_PORT}"
+    echo "  dev                Build + recreate backend + frontend dev. Frontend :${CAMPUS_HOST_FRONTEND_PORT} | Backend :${CAMPUS_HOST_BACKEND_PORT}"
     echo "  prod               Start backend + nginx (needs frontend/build). http://localhost"
     echo "  deploy             Stop all, build frontend + backend, start prod stack."
     echo "  android            Build web, sync Capacitor, open Android Studio. Set REACT_APP_API_URL for device."
     echo "  apk                Build debug APK for same-WiFi testing (auto-detects LAN IP). Output: frontend/android/app/build/outputs/apk/debug/"
     echo "  ios                Build web, sync Capacitor, open Xcode. Set REACT_APP_API_URL for device."
     echo "Services: ${SERVICES[*]}"
-    echo "Examples: $0 dev | $0 apk | $0 android | REACT_APP_API_URL=http://192.168.1.10:8000/api $0 apk"
+    echo "Examples: $0 dev | $0 apk | $0 android | REACT_APP_API_URL=http://192.168.1.10:${CAMPUS_HOST_BACKEND_PORT}/api $0 apk"
     exit 1
 }
 
@@ -117,14 +129,14 @@ case "${1:-}" in
         check_env
         if [ -z "$2" ]; then
             run_compose "up -d backend"
-            echo -e "${GREEN}✅ Backend started (DB = Supabase from .env). http://localhost:8000${NC}"
+            echo -e "${GREEN}✅ Backend started (DB = Supabase from .env). http://localhost:${CAMPUS_HOST_BACKEND_PORT}${NC}"
             echo -e "${YELLOW}Tip: $0 dev (dev server) | $0 prod (frontend) | $0 start db (local DB only)${NC}"
         else
             svc=$(resolve_service "$2")
             validate_service "$svc"
             if [ "$svc" = "db" ]; then
                 cd "$PROJECT_ROOT" && docker-compose --project-name campus-circle --project-directory "$PROJECT_ROOT" --env-file "$PROJECT_ROOT/.env" -f "$COMPOSE_FILE" --profile local-db up -d db
-                echo -e "${GREEN}✅ Local Postgres started. Set SUPABASE_DB_HOST=db in .env to use it.${NC}"
+                echo -e "${GREEN}✅ Local Postgres started (host port ${CAMPUS_HOST_DB_PORT}). Set SUPABASE_DB_HOST=db in .env to use it from containers; from host use localhost:${CAMPUS_HOST_DB_PORT}.${NC}"
             else
                 run_compose "up -d" "$svc"
             fi
@@ -137,7 +149,7 @@ case "${1:-}" in
         docker-compose --project-name campus-circle --project-directory "$PROJECT_ROOT" --env-file "$PROJECT_ROOT/.env" -f "$COMPOSE_FILE" --profile dev --profile nginx --profile migrations --profile local-db down 2>/dev/null || true
         echo -e "${BLUE}Starting dev stack (backend + frontend)...${NC}"
         docker-compose --project-name campus-circle --project-directory "$PROJECT_ROOT" --env-file "$PROJECT_ROOT/.env" -f "$COMPOSE_FILE" --profile dev up -d --build --force-recreate backend frontend
-        echo -e "${GREEN}✅ App running. http://localhost:3000 | Backend http://localhost:8000${NC}"
+        echo -e "${GREEN}✅ App running. http://localhost:${CAMPUS_HOST_FRONTEND_PORT} | Backend http://localhost:${CAMPUS_HOST_BACKEND_PORT}${NC}"
         echo -e "${YELLOW}First time? Run migrations: $0 migrate${NC}"
         ;;
     dev)
@@ -145,31 +157,31 @@ case "${1:-}" in
         cd "$PROJECT_ROOT"
         echo -e "${BLUE}Building and starting dev stack (backend + frontend)...${NC}"
         docker-compose --project-name campus-circle --project-directory "$PROJECT_ROOT" --env-file "$PROJECT_ROOT/.env" -f "$COMPOSE_FILE" --profile dev up -d --build --force-recreate backend frontend
-        echo -e "${GREEN}✅ Dev: Frontend http://localhost:3000 | Backend http://localhost:8000 (DB = Supabase)${NC}"
+        echo -e "${GREEN}✅ Dev: Frontend http://localhost:${CAMPUS_HOST_FRONTEND_PORT} | Backend http://localhost:${CAMPUS_HOST_BACKEND_PORT} (DB = Supabase)${NC}"
         ;;
     prod)
         check_env
         if [ ! -d "$PROJECT_ROOT/frontend/build" ]; then
-            echo -e "${YELLOW}⚠ frontend/build not found. Run: REACT_APP_API_URL=http://localhost/api $0 deploy${NC}"
+            echo -e "${YELLOW}⚠ frontend/build not found. Run: REACT_APP_API_URL=http://localhost:${CAMPUS_HOST_NGINX_PORT}/api $0 deploy${NC}"
             exit 1
         fi
         cd "$PROJECT_ROOT"
         docker-compose --project-name campus-circle --project-directory "$PROJECT_ROOT" --env-file "$PROJECT_ROOT/.env" -f "$COMPOSE_FILE" --profile nginx up -d backend nginx
-        echo -e "${GREEN}✅ Prod: http://localhost | Backend: http://localhost:8000 (DB = Supabase)${NC}"
+        echo -e "${GREEN}✅ Prod: http://localhost:${CAMPUS_HOST_NGINX_PORT} | Backend: http://localhost:${CAMPUS_HOST_BACKEND_PORT} (DB = Supabase)${NC}"
         ;;
     deploy)
         check_env
         echo -e "${BLUE}Stopping all project containers...${NC}"
         cd "$PROJECT_ROOT"
         docker-compose --project-name campus-circle --project-directory "$PROJECT_ROOT" --env-file "$PROJECT_ROOT/.env" -f "$COMPOSE_FILE" --profile dev --profile nginx --profile migrations --profile local-db down 2>/dev/null || true
-        export REACT_APP_API_URL="${REACT_APP_API_URL:-http://localhost/api}"
+        export REACT_APP_API_URL="${REACT_APP_API_URL:-http://localhost:${CAMPUS_HOST_NGINX_PORT}/api}"
         echo -e "${BLUE}Building frontend (REACT_APP_API_URL=$REACT_APP_API_URL)...${NC}"
         cd "$PROJECT_ROOT/frontend" && npm ci && npm run build && cd "$PROJECT_ROOT"
         echo -e "${BLUE}Building backend...${NC}"
         run_compose "build" "backend"
         echo -e "${BLUE}Starting backend + frontend (prod; nginx serves static build; DB = Supabase)...${NC}"
         docker-compose --project-name campus-circle --project-directory "$PROJECT_ROOT" --env-file "$PROJECT_ROOT/.env" -f "$COMPOSE_FILE" --profile nginx up -d backend nginx
-        echo -e "${GREEN}✅ Deployed. App: http://localhost | Backend: http://localhost:8000${NC}"
+        echo -e "${GREEN}✅ Deployed. App: http://localhost:${CAMPUS_HOST_NGINX_PORT} | Backend: http://localhost:${CAMPUS_HOST_BACKEND_PORT}${NC}"
         echo -e "${YELLOW}If DB has no schema: ./infra/scripts/run.sh db migrate${NC}"
         echo -e "${YELLOW}Optional demo users + super admin: ./infra/scripts/run.sh db setup${NC}"
         ;;
@@ -253,8 +265,8 @@ case "${1:-}" in
         lan_url=$(get_lan_api_url)
         api_url="${REACT_APP_API_URL:-$lan_url}"
         if [ -z "$api_url" ]; then
-            echo -e "${YELLOW}Could not detect LAN IP. Set REACT_APP_API_URL=http://YOUR_IP:8000/api for same-WiFi device testing.${NC}"
-            api_url="http://10.0.2.2:8000/api"
+            echo -e "${YELLOW}Could not detect LAN IP. Set REACT_APP_API_URL=http://YOUR_IP:${CAMPUS_HOST_BACKEND_PORT}/api for same-WiFi device testing.${NC}"
+            api_url="http://10.0.2.2:${CAMPUS_HOST_BACKEND_PORT}/api"
         fi
         echo -e "${BLUE}Building APK for same-WiFi testing (API: $api_url)...${NC}"
         cd "$PROJECT_ROOT/frontend" || exit 1

@@ -58,7 +58,7 @@ SUPABASE_DB_USER=postgres
 SUPABASE_DB_PASSWORD=your-secure-password-here
 
 # Frontend API URL (optional)
-REACT_APP_API_URL=http://localhost:8000/api
+REACT_APP_API_URL=http://localhost:3101/api
 
 # Email Confirmation (for development, keep as false)
 # Set to true in production and enable email confirmation in Supabase Dashboard
@@ -77,7 +77,7 @@ For **development and demo**, use dev mode. Production (Nginx on port 80) is for
 ./infra/scripts/docker-manage.sh run
 ```
 
-This stops any existing containers, then starts backend + database + frontend dev server. Open **http://localhost:3000** in your browser.
+This stops any existing containers, then starts backend + database + frontend dev server. Open **http://localhost:3100** in your browser.
 
 #### Run database migrations and setup
 
@@ -150,11 +150,11 @@ docker compose -f infra/docker-compose.yml --project-directory . --profile local
 ./infra/scripts/docker-manage.sh run
 ```
 
-This builds backend + frontend, starts services, and serves at **http://localhost:3000**.
+This builds backend + frontend, starts services, and serves at **http://localhost:3100**.
 
 #### Step 4: Verify
 
-- Open http://localhost:3000
+- Open http://localhost:3100
 - Log in (see Help page for demo credentials)
 - Admin → Manage Events → Import Calendar (upload .ics file)
 - Admin → Manage Tenants → toggle Event Resources, Calendar Import, Calendar View
@@ -164,13 +164,18 @@ This builds backend + frontend, starts services, and serves at **http://localhos
 
 Use an **iCal (.ics)** file. Export from Google Calendar, Outlook, or school calendar systems. PDF or image calendars are not supported; export as .ics instead.
 
+#### Port coordination (observability + other apps on the same machine)
+
+- The shared **`observability-platform`** stack uses host ports in **`23000–23999`** by default (Grafana `23001`, Prometheus `23090`, etc.). See [`observability-platform/docs/ARCHITECTURE.md`](../observability-platform/docs/ARCHITECTURE.md).
+- **campus-circle** dev defaults: **`3100`** (frontend) and **`3101`** (API). **photo-booth** defaults to **`3200`** / **`3201`**. See `observability-platform/docs/ARCHITECTURE.md`.
+
 ### 6. Access the Application
 
-- **Frontend (dev/demo):** http://localhost:3000
-- **Backend API:** http://localhost:8000
-- **API docs:** http://localhost:8000/docs
+- **Frontend (dev/demo):** http://localhost:3100
+- **Backend API:** http://localhost:3101
+- **API docs:** http://localhost:3101/docs
 
-**Production (later):** Use `./infra/scripts/docker-manage.sh deploy` or `prod` to serve the app on http://localhost (port 80). For prototype and MVP, use dev (port 3000).
+**Production (later):** Use `./infra/scripts/docker-manage.sh deploy` or `prod` to serve the static build via nginx (default host **`http://localhost:3108`**). For prototype and MVP, use dev (`http://localhost:3100`).
 
 ## 🧪 Validation and Testing
 
@@ -202,13 +207,13 @@ docker exec campus-circle-db psql -U postgres -d postgres -c "SELECT COUNT(*) FR
 
 ```bash
 # Test root endpoint
-curl http://localhost:8000/
+curl http://localhost:3101/
 
 # Test API docs
-curl http://localhost:8000/docs
+curl http://localhost:3101/docs
 
 # Test events endpoint (may require authentication)
-curl http://localhost:8000/api/events
+curl http://localhost:3101/api/events
 ```
 
 ### Check Service Status
@@ -222,7 +227,7 @@ curl http://localhost:8000/api/events
 All from project root via **`./infra/scripts/docker-manage.sh`**:
 
 ```bash
-# Dev: build + start backend + frontend (http://localhost:3000, backend :8000)
+# Dev: build + start backend + frontend (http://localhost:3100, backend :3101)
 ./infra/scripts/docker-manage.sh dev
 # Or: run (stops existing, then same as dev)
 ./infra/scripts/docker-manage.sh run
@@ -241,7 +246,7 @@ All from project root via **`./infra/scripts/docker-manage.sh`**:
 ./infra/scripts/docker-manage.sh android         # build web, sync Capacitor, open Android Studio
 ./infra/scripts/docker-manage.sh ios             # build web, sync Capacitor, open Xcode
 # Physical device on same Wi‑Fi:
-REACT_APP_API_URL=http://YOUR_IP:8000/api ./infra/scripts/docker-manage.sh android
+REACT_APP_API_URL=http://YOUR_IP:3101/api ./infra/scripts/docker-manage.sh android
 ```
 
 ## 💾 Database Backup and Restore
@@ -302,6 +307,7 @@ For detailed architecture information, see [docs/ARCHITECTURE.md](docs/ARCHITECT
 - [Tenants and Deployment](docs/TENANTS_AND_DEPLOYMENT.md) - Tenant model (Demo-Circle, baseline, new tenants), mobile app builds via Capacitor, deployment (Firebase, Cloud Run, free hosting)
 - [Mobile testing (Android / iOS)](docs/MOBILE_TESTING.md) - Local: `docker-manage.sh android` / `ios`. CI: validate + build APK & iOS. **If APIs/login fail on your phone:** see “Why APIs / login fail on a physical device” there (same-WiFi LAN IP or public backend hosting; same for APK and IPA).
 - [Scripts Documentation](infra/scripts/README.md) - Scripts for DB, Docker, setup
+- [Observability](OBSERVABILITY.md) - How to onboard this repo into `observability-platform`
 - [CHANGELOG.md](CHANGELOG.md) - Version history and changes
 
 ## 🔧 Development
